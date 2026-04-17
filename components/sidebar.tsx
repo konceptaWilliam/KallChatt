@@ -62,7 +62,7 @@ export function Sidebar({
                         : "text-ink hover:bg-border/50"
                     }`}
                   >
-                    # {group.name}
+                    . {group.name}
                   </Link>
                 </li>
               );
@@ -73,16 +73,14 @@ export function Sidebar({
 
       {/* Bottom user area */}
       <div className="border-t border-border p-3">
-        {isAdmin && (
-          <Link
-            href="/settings"
-            className={`block px-2 py-1.5 font-mono text-xs text-muted hover:text-ink transition-colors mb-1 ${
-              pathname === "/settings" ? "text-ink" : ""
-            }`}
-          >
-            Settings
-          </Link>
-        )}
+        <Link
+          href="/settings"
+          className={`block px-2 py-1.5 font-mono text-xs text-muted hover:text-ink transition-colors mb-1 ${
+            pathname === "/settings" ? "text-ink" : ""
+          }`}
+        >
+          Settings
+        </Link>
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink truncate">

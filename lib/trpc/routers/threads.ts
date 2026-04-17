@@ -80,6 +80,45 @@ export const threadsRouter = router({
       return data;
     }),
 
+  delete: protectedProcedure
+    .input(z.object({ threadId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { supabase, profile } = ctx;
+      const admin = createAdminClient();
+
+      const { data: thread } = await supabase
+        .from("threads")
+        .select("group_id")
+        .eq("id", input.threadId)
+        .single();
+
+      if (!thread) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const { data: membership } = await supabase
+        .from("group_memberships")
+        .select("id")
+        .eq("group_id", thread.group_id)
+        .eq("user_id", profile.id)
+        .single();
+
+      if (!membership) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const { error } = await admin
+        .from("threads")
+        .delete()
+        .eq("id", input.threadId);
+
+      if (error) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+
+      return { success: true };
+    }),
+
   updateStatus: protectedProcedure
     .input(
       z.object({

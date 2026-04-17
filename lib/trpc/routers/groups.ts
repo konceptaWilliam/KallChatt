@@ -27,6 +27,25 @@ export const groupsRouter = router({
       }>;
   }),
 
+  leave: protectedProcedure
+    .input(z.object({ groupId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { profile } = ctx;
+      const admin = createAdminClient();
+
+      const { error } = await admin
+        .from("group_memberships")
+        .delete()
+        .eq("group_id", input.groupId)
+        .eq("user_id", profile.id);
+
+      if (error) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+
+      return { success: true };
+    }),
+
   create: adminProcedure
     .input(
       z.object({

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { Resend } from "resend";
 import { router, protectedProcedure } from "../trpc";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -49,4 +50,27 @@ export const profileRouter = router({
 
       return data;
     }),
+
+  sendPasswordChangedEmail: protectedProcedure.mutation(async ({ ctx }) => {
+    const { profile } = ctx;
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    try {
+      await resend.emails.send({
+        from: "Kallchatt <onboarding@resend.dev>",
+        to: profile.email,
+        subject: "Your Kallchatt password has been changed",
+        html: `
+          <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; color: #1A1A18;">
+            <h1 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Password changed</h1>
+            <p style="color: #6B6A65; margin-bottom: 24px;">
+              Your Kallchatt password was recently changed. If this wasn't you, contact your workspace admin immediately.
+            </p>
+          </div>
+        `,
+      });
+    } catch {
+      // Non-fatal
+    }
+    return { success: true };
+  }),
 });

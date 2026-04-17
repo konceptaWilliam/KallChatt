@@ -15,6 +15,7 @@ function ProfileSection() {
   const [displayName, setDisplayName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -30,7 +31,7 @@ function ProfileSection() {
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
-      .upload(path, file, { upsert: true });
+      .upload(path, file, { upsert: true, contentType: file.type });
 
     if (uploadError) {
       setUploadError(uploadError.message);
@@ -43,6 +44,7 @@ function ProfileSection() {
       .getPublicUrl(path);
 
     await updateProfile.mutateAsync({ avatarUrl: `${publicUrl}?t=${Date.now()}` });
+    setAvatarImgError(false);
     setUploading(false);
   }
 
@@ -69,11 +71,12 @@ function ProfileSection() {
             className="relative w-14 h-14 flex-shrink-0 bg-border flex items-center justify-center overflow-hidden hover:opacity-80 transition-opacity disabled:opacity-40 group"
             title="Change profile picture"
           >
-            {profile?.avatar_url ? (
+            {profile?.avatar_url && !avatarImgError ? (
               <img
                 src={profile.avatar_url}
-                alt={profile.display_name}
+                alt={profile.display_name ?? ""}
                 className="w-full h-full object-cover"
+                onError={() => setAvatarImgError(true)}
               />
             ) : (
               <span className="font-mono text-sm font-semibold text-muted">
@@ -147,6 +150,168 @@ function ProfileSection() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function ChangePasswordSection() {
+  const { data: profile } = trpc.profile.get.useQuery();
+  const sendNotification = trpc.profile.sendPasswordChangedEmail.useMutation();
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (!profile?.email) return;
+
+    setLoading(true);
+    setError(null);
+
+    const supabase = createClient();
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: profile.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      setError("Incorrect current password");
+      setLoading(false);
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (updateError) {
+      setError(updateError.message);
+      setLoading(false);
+      return;
+    }
+
+    await sendNotification.mutateAsync();
+
+    setSuccess(true);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setLoading(false);
+    setTimeout(() => setSuccess(false), 4000);
+  }
+
+  return (
+    <div>
+      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
+        Change password
+      </h2>
+      <form onSubmit={handleSubmit} className="border border-border p-4 space-y-4">
+        <div>
+          <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-2">
+            Current password
+          </label>
+          <input
+            type="password"
+            required
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+          />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-2">
+            New password
+          </label>
+          <input
+            type="password"
+            required
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+          />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-2">
+            Confirm new password
+          </label>
+          <input
+            type="password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+          />
+        </div>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        {success && (
+          <p className="text-xs text-green-700">
+            Password changed. A confirmation email has been sent.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+          className="bg-ink text-surface font-mono text-sm px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink/90 transition-colors"
+        >
+          {loading ? "Updating..." : "Change password"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function MyGroupsSection() {
+  const utils = trpc.useUtils();
+  const { data: groups, isLoading } = trpc.groups.list.useQuery();
+  const leaveGroup = trpc.groups.leave.useMutation({
+    onSuccess: () => utils.groups.list.invalidate(),
+  });
+
+  return (
+    <div>
+      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
+        My groups
+      </h2>
+      {isLoading ? (
+        <div className="h-10 bg-border/40 animate-pulse" />
+      ) : (groups ?? []).length === 0 ? (
+        <p className="text-xs text-muted border border-border px-4 py-3">
+          You're not in any groups yet.
+        </p>
+      ) : (
+        <div className="border border-border divide-y divide-border">
+          {(groups ?? []).map((group) => (
+            <div key={group.id} className="px-4 py-3 flex items-center justify-between gap-4">
+              <span className="font-mono text-sm text-ink">. {group.name}</span>
+              <button
+                onClick={() => leaveGroup.mutate({ groupId: group.id })}
+                disabled={leaveGroup.isPending}
+                className="font-mono text-xs text-muted hover:text-red-600 transition-colors"
+              >
+                Leave
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -260,7 +425,7 @@ function MembersSection() {
                   key={g.group_id}
                   className="font-mono text-[10px] text-muted border border-border px-1.5 py-0.5"
                 >
-                  #{g.group_name}
+                  .{g.group_name}
                 </span>
               ))}
             </div>
@@ -359,7 +524,7 @@ function InvitesSection() {
                         : "border-border text-muted hover:text-ink hover:border-ink"
                     }`}
                   >
-                    #{group.name}
+                    .{group.name}
                   </button>
                 ))}
               </div>
@@ -453,7 +618,7 @@ function GroupsSection() {
         <div className="border border-border divide-y divide-border mb-4">
           {(groups ?? []).map((group) => (
             <div key={group.id} className="px-4 py-2.5 font-mono text-sm text-ink">
-              # {group.name}
+              . {group.name}
             </div>
           ))}
         </div>
@@ -491,9 +656,11 @@ function GroupsSection() {
 }
 
 export default function SettingsPage() {
+  const { data: profile } = trpc.profile.get.useQuery();
+  const isAdmin = profile?.role === "ADMIN";
+
   return (
     <div className="flex h-screen bg-surface">
-      {/* Simple back nav */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-6 py-8">
           <div className="mb-8 flex items-center gap-4">
@@ -510,10 +677,12 @@ export default function SettingsPage() {
 
           <div className="space-y-10">
             <ProfileSection />
-            <WorkspaceSection />
-            <GroupsSection />
-            <MembersSection />
-            <InvitesSection />
+            <ChangePasswordSection />
+            {!isAdmin && <MyGroupsSection />}
+            {isAdmin && <WorkspaceSection />}
+            {isAdmin && <GroupsSection />}
+            {isAdmin && <MembersSection />}
+            {isAdmin && <InvitesSection />}
           </div>
         </div>
       </div>

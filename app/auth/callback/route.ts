@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const inviteToken = searchParams.get("inviteToken");
+  const isRecovery = searchParams.get("recovery") === "1";
 
   const supabase = await createClient();
 
@@ -21,6 +22,11 @@ export async function GET(request: Request) {
   // Not authenticated at all → back to login
   if (!user) {
     return NextResponse.redirect(`${origin}/login`);
+  }
+
+  // Password recovery flow → set new password page
+  if (isRecovery) {
+    return NextResponse.redirect(`${origin}/auth/reset-password`);
   }
 
   const admin = createAdminClient();

@@ -156,7 +156,7 @@ export function ThreadList({ groupId }: { groupId: string }) {
                           isActive ? "font-semibold" : ""
                         }`}
                       >
-                        {thread.title}
+                        # {thread.title}
                       </span>
                       <span className="text-[10px] text-muted flex-shrink-0 mt-0.5 font-mono">
                         {formatRelative(thread.updated_at)}
