@@ -5,6 +5,12 @@
 :root {
   --background: #F7F6F2;
   --foreground: #1A1A18;
+
+  /* pastel accent — mint (default) */
+  --pastel: #C8E6D5;
+  --pastel-ink: #2F5A43;
+  --pastel-tint: #EAF5EF;
+  --pastel-deep: #8FBFA3;
 }
 
 * {
@@ -39,4 +45,36 @@ body,
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #C9C7BC;
+}
+
+/* Motion primitives */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%       { opacity: 1;    transform: scale(1.15); }
+}
+
+@keyframes breath {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--pastel) 75%, transparent); }
+  50%       { box-shadow: 0 0 0 6px color-mix(in oklab, var(--pastel) 0%, transparent); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes messageHighlight {
+  0%, 25% { background-color: var(--pastel-tint); }
+  100%     { background-color: transparent; }
 }

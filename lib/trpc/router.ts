@@ -7,6 +7,7 @@ import { workspaceRouter } from "./routers/workspace";
 import { membersRouter } from "./routers/members";
 import { onboardingRouter } from "./routers/onboarding";
 import { profileRouter } from "./routers/profile";
+import { searchRouter } from "./routers/search";
 
 export const appRouter = router({
   groups: groupsRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   members: membersRouter,
   onboarding: onboardingRouter,
   profile: profileRouter,
+  search: searchRouter,
 });
 
 export type AppRouter = typeof appRouter;

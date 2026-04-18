@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc/client";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "./status-badge";
 import { NewThreadDialog } from "./new-thread-dialog";
+import { useUnread, getLastSeen, setLastSeen } from "@/lib/unread-context";
 
 type Thread = {
   id: string;
@@ -37,35 +38,62 @@ function formatRelative(dateStr: string): string {
 }
 
 function sortThreads(threads: Thread[]): Thread[] {
-  const urgentOpen = threads.filter((t) => t.status === "URGENT");
-  const open = threads.filter((t) => t.status === "OPEN");
-  const done = threads.filter((t) => t.status === "DONE");
-
-  const byActivity = (a: Thread, b: Thread) =>
-    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-
-  return [
-    ...urgentOpen.sort(byActivity),
-    ...open.sort(byActivity),
-    ...done.sort(byActivity),
-  ];
+  const order = { URGENT: 0, OPEN: 1, DONE: 2 } as const;
+  return [...threads].sort(
+    (a, b) =>
+      order[a.status] - order[b.status] ||
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
 }
 
-export function ThreadList({ groupId }: { groupId: string }) {
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white font-mono text-[10px] font-semibold leading-none flex-shrink-0">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+export function ThreadList({ groupId, groupName }: { groupId: string; groupName: string }) {
   const pathname = usePathname();
   const [showNewThread, setShowNewThread] = useState(false);
   const utils = trpc.useUtils();
+  const { threadCounts, setThreadCount } = useUnread();
 
   const { data: rawThreads = [], isLoading } = trpc.threads.list.useQuery(
     { groupId },
     { refetchOnWindowFocus: false }
   );
 
-  // Cast the data
   const threads = rawThreads as unknown as Thread[];
   const sorted = sortThreads(threads);
 
-  // Realtime: subscribe to thread updates in this group
+  // Calculate and push unread counts whenever thread data changes
+  useEffect(() => {
+    if (threads.length === 0) return;
+
+    const now = Date.now();
+
+    for (const thread of threads) {
+      // If never seen, initialise lastSeen to now so old messages aren't counted
+      const lastSeen = getLastSeen(thread.id);
+      if (lastSeen === 0) {
+        setLastSeen(thread.id, now);
+        setThreadCount(thread.id, groupId, 0);
+        continue;
+      }
+
+      const unread = (thread.messages ?? []).filter(
+        (m) => new Date(m.created_at).getTime() > lastSeen
+      ).length;
+
+      setThreadCount(thread.id, groupId, unread);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawThreads, groupId]);
+
+  // Realtime: invalidate thread list on any change (new messages update thread.updated_at)
   useEffect(() => {
     const supabase = createClient();
 
@@ -73,117 +101,128 @@ export function ThreadList({ groupId }: { groupId: string }) {
       .channel(`threads:group:${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "threads",
-          filter: `group_id=eq.${groupId}`,
-        },
-        () => {
-          utils.threads.list.invalidate({ groupId });
-        }
+        { event: "*", schema: "public", table: "threads", filter: `group_id=eq.${groupId}` },
+        () => { utils.threads.list.invalidate({ groupId }); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => { utils.threads.list.invalidate({ groupId }); }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [groupId, utils]);
 
   return (
-    <div className="w-80 flex-shrink-0 border-r border-border flex flex-col h-full">
+    <section className="w-[336px] flex-shrink-0 border-r border-border flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <h2 className="font-mono text-sm font-semibold text-ink">Threads</h2>
-        <button
-          onClick={() => setShowNewThread(true)}
-          className="font-mono text-xs text-muted hover:text-ink transition-colors px-2 py-1 border border-border hover:border-ink"
-        >
-          + New
-        </button>
-      </div>
+      <header className="px-[18px] pt-[14px] pb-[10px] border-b border-border">
+        <div className="flex items-baseline justify-between">
+          <span className="font-mono text-sm font-semibold text-ink">
+            <span className="text-muted-2">· </span>{groupName}
+          </span>
+          <button
+            onClick={() => setShowNewThread(true)}
+            className="font-mono text-[11px] px-2.5 py-1 border border-pastel-deep text-pastel-ink transition-all duration-150 hover:-translate-y-px"
+            style={{ background: "var(--pastel)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 0 var(--pastel-deep)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = "none";
+            }}
+          >
+            + new thread
+          </button>
+        </div>
+      </header>
 
       {/* Thread items */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-[72px] bg-border/40 animate-pulse"
-              />
+              <div key={i} className="h-[80px] bg-border/40 animate-pulse" />
             ))}
           </div>
         ) : sorted.length === 0 ? (
           <div className="p-6 text-center">
-            <p className="text-sm text-muted">No threads yet</p>
-            <button
-              onClick={() => setShowNewThread(true)}
-              className="mt-2 font-mono text-xs text-accent hover:underline"
-            >
-              Create the first one
-            </button>
+            <p className="text-sm text-muted font-mono">nothing here yet</p>
           </div>
         ) : (
-          <ul>
-            {sorted.map((thread) => {
-              const href = `/g/${groupId}/t/${thread.id}`;
-              const isActive = pathname === href;
-              const lastMessage = thread.messages?.[thread.messages.length - 1];
+          sorted.map((thread, i) => {
+            const href = `/g/${groupId}/t/${thread.id}`;
+            const isActive = pathname === href;
+            const isDone = thread.status === "DONE";
+            const lastMessage = thread.messages?.[thread.messages.length - 1];
+            const lastAuthor = lastMessage?.profiles?.display_name?.split(" ")[0];
+            const unread = isActive ? 0 : (threadCounts[thread.id] ?? 0);
 
-              return (
-                <li
-                  key={thread.id}
-                  className={`border-b border-border ${
-                    thread.status === "DONE" ? "opacity-40" : ""
-                  }`}
-                >
-                  <Link
-                    href={href}
-                    className={`block px-4 py-3 transition-colors min-h-[72px] ${
-                      isActive
-                        ? "bg-ink/5"
-                        : "hover:bg-border/30"
-                    } ${
-                      thread.status === "URGENT"
-                        ? "border-l-[3px] border-l-accent pl-[13px]"
-                        : ""
-                    }`}
+            const borderLeftColor =
+              thread.status === "URGENT"
+                ? "#8A4B1F"
+                : isActive
+                ? "var(--pastel-deep)"
+                : "transparent";
+
+            return (
+              <Link
+                key={thread.id}
+                href={href}
+                className={`block py-3 border-b border-border transition-colors duration-150 ${
+                  isDone ? "opacity-55" : ""
+                } ${isActive ? "bg-pastel-tint/60" : "hover:bg-border/30"}`}
+                style={{
+                  borderLeft: `3px solid ${borderLeftColor}`,
+                  paddingLeft: "15px",
+                  paddingRight: "18px",
+                  animation: `fadeUp 360ms ${i * 30}ms both ease-out`,
+                }}
+              >
+                {/* Title + unread badge + timestamp */}
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span
+                    className={`font-mono text-[13px] leading-snug truncate ${
+                      isDone ? "line-through decoration-muted-2" : ""
+                    } ${unread > 0 ? "font-semibold" : isActive ? "font-semibold" : "font-medium"}`}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span
-                        className={`font-mono text-sm font-medium text-ink leading-tight line-clamp-1 ${
-                          isActive ? "font-semibold" : ""
-                        }`}
-                      >
-                        # {thread.title}
+                    <span className="text-muted-2"># </span>
+                    {thread.title}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {unread > 0 && <UnreadBadge count={unread} />}
+                    <span className="font-mono text-[10px] text-muted">
+                      {formatRelative(thread.updated_at)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status pill */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <StatusBadge status={thread.status} />
+                </div>
+
+                {/* Last message preview */}
+                {lastMessage && (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {lastAuthor && (
+                      <span className="font-mono text-[10px] text-muted flex-shrink-0">
+                        {lastAuthor}:
                       </span>
-                      <span className="text-[10px] text-muted flex-shrink-0 mt-0.5 font-mono">
-                        {formatRelative(thread.updated_at)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={thread.status} />
-                      {lastMessage && (
-                        <span className="text-xs text-muted truncate">
-                          {lastMessage.body}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    )}
+                    <span className="text-xs text-muted truncate">{lastMessage.body}</span>
+                  </div>
+                )}
+              </Link>
+            );
+          })
         )}
       </div>
 
       {showNewThread && (
-        <NewThreadDialog
-          groupId={groupId}
-          onClose={() => setShowNewThread(false)}
-        />
+        <NewThreadDialog groupId={groupId} onClose={() => setShowNewThread(false)} />
       )}
-    </div>
+    </section>
   );
 }

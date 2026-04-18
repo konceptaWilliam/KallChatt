@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Kallchatt",
+  title: "Coldsoup",
   description: "Radical simplicity for small teams",
 };
 

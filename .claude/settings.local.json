@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"/Users/williamulff/.claude/projects/-Users-williamulff-KallChatt/d9101243-87c0-4de0-bbca-154e60c36bf6/tool-results/webfetch-1776496983660-vmi6l9.bin\" /tmp/design.gz)",
+      "Bash(gunzip -f /tmp/design.gz)",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p /tmp/design_extracted)",
+      "Bash(tar -xf /tmp/design -C /tmp/design_extracted)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}
