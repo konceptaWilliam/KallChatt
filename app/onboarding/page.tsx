@@ -47,7 +47,7 @@ function OnboardingForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {userEmail && (
-            <div className="border border-border px-3 py-2 bg-white">
+            <div className="border border-border px-3 py-2 bg-surface-2">
               <p className="font-mono text-xs text-muted uppercase tracking-wider">
                 Signed in as
               </p>
@@ -70,7 +70,7 @@ function OnboardingForm() {
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
               maxLength={60}
-              className="w-full border border-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
             />
           </div>
 

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #F7F6F2;
+  --background: #F2EFE8;
   --foreground: #1A1A18;
 
   /* pastel accent — mint (default) */
@@ -40,11 +40,11 @@ body,
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E2E0D8;
+  background: #E2DDD2;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #C9C7BC;
+  background: #D0C9BB;
 }
 
 /* Motion primitives */

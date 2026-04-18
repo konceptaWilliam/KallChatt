@@ -120,7 +120,7 @@ function ProfileSection() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={60}
-              className="flex-1 border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:border-ink"
+              className="flex-1 border border-border bg-surface-2 px-3 py-2 text-sm text-ink focus:outline-none focus:border-ink"
               autoFocus
             />
             <button
@@ -227,7 +227,7 @@ function ChangePasswordSection() {
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -241,7 +241,7 @@ function ChangePasswordSection() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -255,7 +255,7 @@ function ChangePasswordSection() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -348,7 +348,7 @@ function WorkspaceSection() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="flex-1 border border-border bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:border-ink"
+            className="flex-1 border border-border bg-surface-2 px-3 py-2 text-sm text-ink focus:outline-none focus:border-ink"
             autoFocus
           />
           <button
@@ -501,7 +501,7 @@ function InvitesSection() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@example.com"
-              className="w-full border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+              className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
             />
           </div>
 
@@ -638,7 +638,7 @@ function GroupsSection() {
           onChange={(e) => setName(e.target.value)}
           placeholder="Group name"
           maxLength={80}
-          className="flex-1 border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+          className="flex-1 border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
         />
         <button
           type="submit"

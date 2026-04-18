@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
         </div>
 
         {success ? (
-          <p className="text-sm text-ink border border-border bg-white px-3 py-2">
+          <p className="text-sm text-ink border border-border bg-surface-2 px-3 py-2">
             Password updated. Redirecting to sign in...
           </p>
         ) : (
@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full border border-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+                className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
               />
             </div>
 
@@ -86,7 +86,7 @@ export default function ResetPasswordPage() {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="••••••••"
-                className="w-full border border-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+                className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
               />
             </div>
 

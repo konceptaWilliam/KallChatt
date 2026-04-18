@@ -9,12 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        surface: "#F7F6F2",
-        "surface-2": "#FBFAF7",
+        surface: "#F2EFE8",
+        "surface-2": "#F7F4ED",
         ink: "#1A1A18",
         "ink-soft": "#2A2A27",
-        border: "#E2E0D8",
-        "border-strong": "#D8D5CA",
+        border: "#E2DDD2",
+        "border-strong": "#D0C9BB",
         muted: "#6B6A65",
         "muted-2": "#9A988F",
         // pastel accent — driven by CSS vars so they can be themed later

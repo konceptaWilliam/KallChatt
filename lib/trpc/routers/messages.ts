@@ -3,6 +3,23 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const ALLOWED_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "gif", "webp",
+  "mp3", "wav", "ogg", "m4a", "aac", "flac",
+]);
+
+function validateAttachmentUrl(url: string): boolean {
+  try {
+    const { hostname, pathname } = new URL(url);
+    const supabaseHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
+    if (hostname !== supabaseHost) return false;
+    const ext = pathname.split(".").pop()?.toLowerCase() ?? "";
+    return ALLOWED_EXTENSIONS.has(ext);
+  } catch {
+    return false;
+  }
+}
+
 const REACTION_TYPES = ["👍", "👎", "❓"] as const;
 
 export const messagesRouter = router({
@@ -107,6 +124,13 @@ export const messagesRouter = router({
         .single();
 
       if (!membership) throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Validate all attachment URLs come from our own storage
+      for (const att of input.attachments) {
+        if (!validateAttachmentUrl(att.url)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid attachment URL: ${att.name}` });
+        }
+      }
 
       const [{ data, error }] = await Promise.all([
         admin

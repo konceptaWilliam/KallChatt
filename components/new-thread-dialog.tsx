@@ -61,7 +61,7 @@ export function NewThreadDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What needs to be discussed?"
               maxLength={200}
-              className="w-full border border-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
             />
           </div>
 

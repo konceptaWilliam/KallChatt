@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { createClient } from "@/lib/supabase/client";
 import { useUnread } from "@/lib/unread-context";
+import { validateFile, resizeImageIfNeeded } from "@/lib/file-utils";
 
 type ThreadStatus = "OPEN" | "URGENT" | "DONE";
 
@@ -385,6 +386,8 @@ export function ThreadDetail({
   highlightMessageId?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  // Maps messageId -> animationDelay (ms) for the initial batch stagger
+  const initialDelays = useRef<Map<string, number>>(new Map());
   const [body, setBody] = useState("");
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>(initialStatus);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -392,7 +395,6 @@ export function ThreadDetail({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeLightbox, setActiveLightbox] = useState<Attachment | null>(null);
-  const [openReactionPicker, setOpenReactionPicker] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -448,7 +450,12 @@ export function ThreadDetail({
 
   useEffect(() => {
     if (loadedMessages) {
-      setMessages(loadedMessages as unknown as Message[]);
+      const msgs = loadedMessages as unknown as Message[];
+      // Assign staggered delays for the initial batch, capped so long threads don't wait forever
+      initialDelays.current = new Map(
+        msgs.map((m, i) => [m.id, Math.min(i * 30, 600)])
+      );
+      setMessages(msgs);
     }
   }, [loadedMessages]);
 
@@ -553,24 +560,26 @@ export function ThreadDetail({
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const results: Attachment[] = [];
-    for (const file of files) {
-      const ext = file.name.split(".").pop() ?? "bin";
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage
-        .from("attachments")
-        .upload(path, file, { contentType: file.type });
-      if (error) throw error;
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("attachments").getPublicUrl(path);
-      results.push({
-        url: publicUrl,
-        type: file.type.startsWith("image/") ? "image" : "audio",
-        name: file.name,
-      });
-    }
-    return results;
+    return Promise.all(
+      files.map(async (raw) => {
+        // Resize images before upload
+        const file = await resizeImageIfNeeded(raw);
+        const ext = file.name.split(".").pop() ?? "bin";
+        const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage
+          .from("attachments")
+          .upload(path, file, { contentType: file.type });
+        if (error) throw error;
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("attachments").getPublicUrl(path);
+        return {
+          url: publicUrl,
+          type: file.type.startsWith("image/") ? "image" : ("audio" as const),
+          name: raw.name, // keep original name for display
+        };
+      })
+    );
   }
 
   async function handleSend() {
@@ -603,10 +612,25 @@ export function ThreadDetail({
     }
   }
 
+  function showError(msg: string) {
+    setUploadError(msg);
+    setTimeout(() => setUploadError(null), 6000);
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    setPendingFiles((prev) => [...prev, ...files]);
+    const chosen = Array.from(e.target.files ?? []);
     e.target.value = "";
+
+    const errors: string[] = [];
+    const valid: File[] = [];
+    for (const file of chosen) {
+      const err = validateFile(file);
+      if (err) errors.push(`${err.file}: ${err.reason}`);
+      else valid.push(file);
+    }
+
+    if (errors.length > 0) showError(errors.join("\n"));
+    if (valid.length > 0) setPendingFiles((prev) => [...prev, ...valid]);
   }
 
   function removePendingFile(index: number) {
@@ -738,6 +762,7 @@ export function ThreadDetail({
                       animation: msg.id === highlightMessageId
                         ? "fadeUp 360ms ease-out both, messageHighlight 2.4s 400ms ease-out forwards"
                         : "fadeUp 360ms ease-out both",
+                      animationDelay: `${initialDelays.current.get(msg.id) ?? 0}ms`,
                     }}
                     onMouseEnter={(e) => {
                       const actions = e.currentTarget.querySelector<HTMLElement>(".msg-actions");
@@ -806,7 +831,7 @@ export function ThreadDetail({
                                 onClick={() => setActiveLightbox(att)}
                                 className="text-left transition-all duration-150 hover:scale-[1.03]"
                                 style={{
-                                  background: "#fff",
+                                  background: "var(--background)",
                                   padding: "8px 8px 28px 8px",
                                   boxShadow: "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
                                   rotate: `${(i % 2 === 0 ? 1 : -1) * (1 + (i % 3) * 0.5)}deg`,
@@ -914,9 +939,17 @@ export function ThreadDetail({
           </div>
         )}
         {!isDone && (sendMessage.error || uploadError) && (
-          <p className="text-xs text-red-600 mb-2">
-            {uploadError ?? sendMessage.error?.message}
-          </p>
+          <div className="flex items-start justify-between gap-3 mb-2 px-3 py-2 border border-red-200 bg-red-50">
+            <p className="font-mono text-[11px] text-red-700 whitespace-pre-wrap leading-snug">
+              {uploadError ?? sendMessage.error?.message}
+            </p>
+            <button
+              onClick={() => setUploadError(null)}
+              className="font-mono text-[13px] leading-none text-red-400 hover:text-red-700 transition-colors flex-shrink-0 mt-px"
+            >
+              ×
+            </button>
+          </div>
         )}
 
         {/* Pending file previews */}

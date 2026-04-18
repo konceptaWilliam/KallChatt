@@ -175,7 +175,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                 key={thread.id}
                 href={href}
                 className={`block py-3 border-b border-border transition-colors duration-150 ${
-                  isDone ? "opacity-55" : ""
+                  isDone ? "opacity-35" : ""
                 } ${isActive ? "bg-pastel-tint/60" : "hover:bg-border/30"}`}
                 style={{
                   borderLeft: `3px solid ${borderLeftColor}`,
@@ -188,7 +188,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span
                     className={`font-mono text-[13px] leading-snug truncate ${
-                      isDone ? "line-through decoration-muted-2" : ""
+                      isDone ? "line-through decoration-muted-2 text-muted" : ""
                     } ${unread > 0 ? "font-semibold" : isActive ? "font-semibold" : "font-medium"}`}
                   >
                     <span className="text-muted-2"># </span>
