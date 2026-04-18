@@ -804,23 +804,25 @@ export function ThreadDetail({
                               <button
                                 key={i}
                                 onClick={() => setActiveLightbox(att)}
-                                className="w-[220px] border border-border bg-surface-2 p-2.5 flex flex-col gap-2 text-left hover:-translate-y-px hover:border-pastel-deep transition-all duration-150"
+                                className="text-left transition-all duration-150 hover:scale-[1.03]"
+                                style={{
+                                  background: "#fff",
+                                  padding: "8px 8px 28px 8px",
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
+                                  rotate: `${(i % 2 === 0 ? 1 : -1) * (1 + (i % 3) * 0.5)}deg`,
+                                  width: "160px",
+                                }}
                               >
-                                <div
-                                  className="w-full border border-dashed border-pastel-deep flex items-center justify-center"
-                                  style={{
-                                    aspectRatio: "16/10",
-                                    background:
-                                      "repeating-linear-gradient(135deg, var(--pastel-tint) 0 6px, var(--surface-2) 6px 12px)",
-                                  }}
+                                <img
+                                  src={att.url}
+                                  alt={att.name}
+                                  className="w-full object-cover"
+                                  style={{ aspectRatio: "1/1", display: "block" }}
+                                />
+                                <span
+                                  className="font-mono text-[10px] text-center truncate block mt-2"
+                                  style={{ color: "#888" }}
                                 >
-                                  <img
-                                    src={att.url}
-                                    alt={att.name}
-                                    className="max-w-full max-h-full object-contain"
-                                  />
-                                </div>
-                                <span className="font-mono text-[11px] text-muted truncate">
                                   {att.name}
                                 </span>
                               </button>
