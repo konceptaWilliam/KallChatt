@@ -75,3 +75,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 - Avatar upload storage policies need to be applied in Supabase (see setup above) — currently getting RLS error on upload
 - Debug log in `app/page.tsx` (console.log on line ~21) should be removed once stable
+
+@.agents/skills/caveman/SKILL.md
+@.agents/skills/caveman-compress/SKILL.md
+@.agents/skills/caveman-help/SKILL.md
+

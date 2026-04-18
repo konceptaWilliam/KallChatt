@@ -24,7 +24,7 @@ export function Sidebar({
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { groupCounts } = useUnread();
+  const { groupCounts, groupUrgentCounts } = useUnread();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -77,7 +77,6 @@ export function Sidebar({
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
         <span className="font-mono text-[11px] flex-1 text-left">search</span>
-        <kbd className="font-mono text-[10px] text-muted-2">⌘K</kbd>
       </button>
 
       {/* Group list */}
@@ -109,9 +108,14 @@ export function Sidebar({
                   {group.name}
                 </span>
                 {(groupCounts[group.id] ?? 0) > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white font-mono text-[10px] font-semibold leading-none">
-                    {(groupCounts[group.id] ?? 0) > 99 ? "99+" : groupCounts[group.id]}
-                  </span>
+                  <span
+                    className="inline-block w-2 h-2 flex-shrink-0"
+                    style={{
+                      background: (groupUrgentCounts[group.id] ?? 0) > 0 ? "hsl(0 75% 52%)" : "hsl(0 70% 78%)",
+                      border: `1px solid ${(groupUrgentCounts[group.id] ?? 0) > 0 ? "hsl(0 65% 38%)" : "hsl(0 50% 62%)"}`,
+                      transform: "rotate(45deg)",
+                    }}
+                  />
                 )}
               </Link>
             );

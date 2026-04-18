@@ -46,12 +46,16 @@ function sortThreads(threads: Thread[]): Thread[] {
   );
 }
 
-function UnreadBadge({ count }: { count: number }) {
-  if (count <= 0) return null;
+function UnreadPrism({ isUrgent }: { isUrgent: boolean }) {
   return (
-    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white font-mono text-[10px] font-semibold leading-none flex-shrink-0">
-      {count > 99 ? "99+" : count}
-    </span>
+    <span
+      className="inline-block w-2 h-2 flex-shrink-0"
+      style={{
+        background: isUrgent ? "hsl(0 75% 52%)" : "hsl(0 70% 78%)",
+        border: `1px solid ${isUrgent ? "hsl(0 65% 38%)" : "hsl(0 50% 62%)"}`,
+        transform: "rotate(45deg)",
+      }}
+    />
   );
 }
 
@@ -88,7 +92,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
         (m) => new Date(m.created_at).getTime() > lastSeen
       ).length;
 
-      setThreadCount(thread.id, groupId, unread);
+      setThreadCount(thread.id, groupId, unread, thread.status === "URGENT");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawThreads, groupId]);
@@ -191,7 +195,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                     {thread.title}
                   </span>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {unread > 0 && <UnreadBadge count={unread} />}
+                    {unread > 0 && <UnreadPrism isUrgent={thread.status === "URGENT"} />}
                     <span className="font-mono text-[10px] text-muted">
                       {formatRelative(thread.updated_at)}
                     </span>

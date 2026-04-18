@@ -269,11 +269,20 @@ function Avatar({
 function StatusControl({
   threadId,
   currentStatus,
+  threadTitle,
 }: {
   threadId: string;
   currentStatus: ThreadStatus;
+  threadTitle: string;
 }) {
-  const [justChanged, setJustChanged] = useState(false);
+  const [optimisticStatus, setOptimisticStatus] = useState<ThreadStatus | null>(null);
+  const [confirmReopen, setConfirmReopen] = useState<ThreadStatus | null>(null);
+  const displayStatus = optimisticStatus ?? currentStatus;
+
+  useEffect(() => {
+    if (optimisticStatus === currentStatus) setOptimisticStatus(null);
+  }, [currentStatus, optimisticStatus]);
+
   const utils = trpc.useUtils();
   const updateStatus = trpc.threads.updateStatus.useMutation({
     onMutate: async () => {
@@ -282,64 +291,78 @@ function StatusControl({
     onSettled: () => {
       utils.threads.list.invalidate();
     },
+    onError: () => {
+      setOptimisticStatus(null);
+    },
   });
 
   const statuses: ThreadStatus[] = ["OPEN", "URGENT", "DONE"];
 
   function handleClick(s: ThreadStatus) {
-    if (s === currentStatus) return;
+    if (s === displayStatus) return;
+    if (displayStatus === "DONE") {
+      setConfirmReopen(s);
+      return;
+    }
+    setOptimisticStatus(s);
     updateStatus.mutate({ threadId, status: s });
-    setJustChanged(true);
-    setTimeout(() => setJustChanged(false), 400);
+  }
+
+  function confirmReopenTo(s: ThreadStatus) {
+    setConfirmReopen(null);
+    setOptimisticStatus(s);
+    updateStatus.mutate({ threadId, status: s });
   }
 
   const activeStyle = (s: ThreadStatus) => {
-    if (s === "URGENT")
-      return {
-        background: "#F6E6D4",
-        color: "#8A4B1F",
-      };
-    if (s === "DONE")
-      return {
-        background: "#ECEBE4",
-        color: "#5A5954",
-      };
-    return {
-      background: "var(--pastel)",
-      color: "var(--pastel-ink)",
-    };
+    if (s === "URGENT") return { background: "#F6E6D4", color: "#8A4B1F" };
+    if (s === "DONE") return { background: "#ECEBE4", color: "#5A5954" };
+    return { background: "var(--pastel)", color: "var(--pastel-ink)" };
   };
 
+  const activeIdx = statuses.indexOf(displayStatus);
+
+  if (confirmReopen) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[10px] text-muted uppercase tracking-wider">reopen {threadTitle}?</span>
+        <button
+          onClick={() => confirmReopenTo(confirmReopen)}
+          className="font-mono text-[10px] uppercase tracking-wider px-2 py-[3px] border border-border text-ink hover:bg-border/40 transition-colors"
+        >
+          yes
+        </button>
+        <button
+          onClick={() => setConfirmReopen(null)}
+          className="font-mono text-[10px] uppercase tracking-wider px-2 py-[3px] text-muted hover:text-ink transition-colors"
+        >
+          cancel
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center border border-border bg-surface-2">
-      {statuses.map((s, idx) => {
-        const active = s === currentStatus;
+    <div className="relative flex items-center border border-border bg-surface-2 overflow-hidden">
+      <div
+        className="absolute top-0 bottom-0 w-1/3 transition-transform duration-200 ease-in-out"
+        style={{
+          transform: `translateX(${activeIdx * 100}%)`,
+          ...activeStyle(displayStatus),
+        }}
+      />
+      {statuses.map((s) => {
+        const active = s === displayStatus;
         return (
           <button
             key={s}
             onClick={() => handleClick(s)}
             disabled={updateStatus.isPending}
-            className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-[5px] transition-colors duration-200 border-r last:border-r-0 border-border disabled:opacity-40 ${
+            className={`relative z-10 flex-1 min-w-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-[5px] transition-colors duration-200 border-r last:border-r-0 border-border disabled:opacity-40 ${
               active ? "" : "text-muted hover:text-ink"
             }`}
-            style={
-              active
-                ? {
-                    ...activeStyle(s),
-                    animation: justChanged ? "pop 300ms cubic-bezier(.2,.9,.3,1.2)" : undefined,
-                  }
-                : undefined
-            }
+            style={active ? { color: activeStyle(s).color } : undefined}
           >
-            {active && s === "URGENT" && (
-              <span
-                className="inline-block w-[5px] h-[5px] rounded-full mr-1.5 align-middle"
-                style={{
-                  background: "#8A4B1F",
-                  animation: "pulseDot 1.6s ease-in-out infinite",
-                }}
-              />
-            )}
             {s.toLowerCase()}
           </button>
         );
@@ -616,7 +639,7 @@ export function ThreadDetail({
           </h1>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <StatusControl threadId={threadId} currentStatus={threadStatus} />
+          <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
           {confirmDelete ? (
             <div className="flex items-center gap-2">
               <span className="font-mono text-[10px] text-red-600 uppercase tracking-wider">
