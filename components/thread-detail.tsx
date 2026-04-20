@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { trpc } from "@/lib/trpc/client";
 import { createClient } from "@/lib/supabase/client";
 import { useUnread } from "@/lib/unread-context";
@@ -572,7 +573,7 @@ export function ThreadDetail({
   const [body, setBody] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [myInfo, setMyInfo] = useState<{ id: string; display_name: string } | null>(null);
-  const presenceChannelRef = useRef<ReturnType<typeof createClient>["channel"] | null>(null);
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>(initialStatus);
   const [confirmDelete, setConfirmDelete] = useState(false);

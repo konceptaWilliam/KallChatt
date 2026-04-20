@@ -4,9 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-import { grid } from "ldrs";
-grid.register();
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -197,7 +194,13 @@ export default function LoginPage() {
             className="w-full bg-ink text-surface font-mono text-sm font-medium py-2.5 px-4 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink/90 transition-colors"
           >
             {loading ? (
-              <l-grid size="25" speed="1.5" color="black"></l-grid>
+              <span className="inline-flex items-center justify-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                />
+                <span>Signing in...</span>
+              </span>
             ) : (
               "Sign in"
             )}
