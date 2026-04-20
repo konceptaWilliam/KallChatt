@@ -18,6 +18,7 @@ type Thread = {
   group_id: string;
   messages?: Array<{
     body: string;
+    is_deleted?: boolean;
     created_at: string;
     profiles: { display_name: string } | null;
   }>;
@@ -39,11 +40,8 @@ function formatRelative(dateStr: string): string {
 }
 
 function sortThreads(threads: Thread[]): Thread[] {
-  const order = { URGENT: 0, OPEN: 1, DONE: 2 } as const;
   return [...threads].sort(
-    (a, b) =>
-      order[a.status] - order[b.status] ||
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
 }
 
@@ -233,7 +231,9 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                         {lastAuthor}:
                       </span>
                     )}
-                    <span className="text-xs text-muted truncate">{lastMessage.body}</span>
+                    <span className="text-xs text-muted truncate italic">
+                      {lastMessage.is_deleted ? "message deleted" : lastMessage.body}
+                    </span>
                   </div>
                 )}
               </Link>

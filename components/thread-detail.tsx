@@ -23,6 +23,12 @@ type Reaction = {
   userReacted: boolean;
 };
 
+type ReplyTo = {
+  id: string;
+  body: string;
+  author_name: string;
+};
+
 const REACTION_DEFAULTS: Reaction[] = [
   { type: "👍", count: 0, userReacted: false },
   { type: "👎", count: 0, userReacted: false },
@@ -33,10 +39,14 @@ type Message = {
   id: string;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  is_deleted: boolean;
   user_id: string | null;
   thread_id: string;
   attachments: Attachment[];
   reactions: Reaction[];
+  reply_to_id: string | null;
+  reply_to: ReplyTo | null;
   profiles: { id: string; display_name: string; avatar_url: string | null } | null;
 };
 
@@ -60,6 +70,49 @@ function formatDate(dateStr: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function renderBody(
+  body: string,
+  members: { id: string; display_name: string }[],
+  myId: string
+): React.ReactNode {
+  if (!members.length || !body) return body;
+
+  const sorted = [...members].sort((a, b) => b.display_name.length - a.display_name.length);
+  const escaped = sorted.map((m) => m.display_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const regex = new RegExp(`@(${escaped.join("|")})`, "g");
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  regex.lastIndex = 0;
+  while ((match = regex.exec(body)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{body.slice(lastIndex, match.index)}</span>);
+    }
+    const member = members.find((m) => m.display_name === match![1]);
+    const isMe = member?.id === myId;
+    parts.push(
+      <span
+        key={key++}
+        className={`font-semibold px-0.5 rounded-sm ${
+          isMe ? "bg-pastel-tint text-pastel-ink" : "bg-surface-2 text-ink"
+        }`}
+      >
+        @{match[1]}
+      </span>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < body.length) {
+    parts.push(<span key={key++}>{body.slice(lastIndex)}</span>);
+  }
+
+  return parts.length ? <>{parts}</> : body;
 }
 
 function AttachmentModal({
@@ -235,7 +288,6 @@ function Avatar({
     .join("")
     .toUpperCase();
 
-  // Deterministic hue from name
   const hue =
     name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
 
@@ -284,13 +336,10 @@ function ImageGallery({
   const containerRef = useRef<HTMLDivElement>(null);
   const n = attachments.length;
 
-  // Reset position when gallery collapses
   useEffect(() => {
     if (!expanded) setOffset({ x: 0, y: 0 });
   }, [expanded]);
 
-  // Set grabbing cursor on <body> during drag so it stays consistent
-  // even when the pointer moves faster than the element can follow
   useEffect(() => {
     if (isDragging) {
       document.body.style.cursor = "grabbing";
@@ -305,7 +354,6 @@ function ImageGallery({
     };
   }, [isDragging]);
 
-  // Global mousemove / mouseup while a drag is active
   useEffect(() => {
     if (!isDragging) return;
 
@@ -320,7 +368,6 @@ function ImageGallery({
     function onUp(e: MouseEvent) {
       setIsDragging(false);
       dragStart.current = null;
-      // Collapse if the pointer ended outside the container
       if (containerRef.current) {
         const r = containerRef.current.getBoundingClientRect();
         const inside = e.clientX >= r.left && e.clientX <= r.right
@@ -340,9 +387,6 @@ function ImageGallery({
   function startDrag(clientX: number, clientY: number) {
     hasDraggedRef.current = false;
 
-    // Expanded width is deterministic: 130px per image + 10px gap between each.
-    // Use this instead of measuring the DOM so bounds are correct even before
-    // the fan animation has finished running.
     let minX = 0; const maxX = 0;
     const parent = containerRef.current?.parentElement;
     if (parent) {
@@ -362,7 +406,6 @@ function ImageGallery({
       style={{
         transform: `translate(${offset.x}px, ${offset.y}px)`,
         cursor: expanded ? (isDragging ? "grabbing" : "grab") : "default",
-        // Prevent the browser from scrolling/panning the page while the gallery is being dragged
         touchAction: expanded ? "none" : "auto",
         zIndex: isDragging ? 10 : undefined,
       }}
@@ -413,7 +456,6 @@ function ImageGallery({
               width: "130px",
               marginLeft: i === 0 ? 0 : (expanded ? "10px" : "-92px"),
               zIndex: expanded ? "auto" : n - i,
-              // Disable spring transitions while dragging so movement is 1:1 with the pointer
               transition: isDragging
                 ? "box-shadow 200ms ease"
                 : "rotate 320ms cubic-bezier(0.34,1.56,0.64,1), margin-left 280ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms ease",
@@ -438,7 +480,6 @@ function ImageGallery({
         );
       })}
 
-      {/* Count badge — fades out when gallery is spread */}
       <div
         className="absolute -bottom-0.5 right-0 bg-ink text-surface font-mono text-[9px] leading-none px-1.5 py-0.5 pointer-events-none select-none"
         style={{ opacity: expanded ? 0 : 1, transition: "opacity 200ms ease" }}
@@ -568,7 +609,6 @@ export function ThreadDetail({
   highlightMessageId?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  // Maps messageId -> animationDelay (ms) for the initial batch stagger
   const initialDelays = useRef<Map<string, number>>(new Map());
   const [body, setBody] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -594,12 +634,21 @@ export function ThreadDetail({
   const router = useRouter();
   const { markRead } = useUnread();
 
-  // Mark this thread as read whenever it is mounted or its ID changes
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState<{ id: string; body: string; authorName: string } | null>(null);
+
+  // Edit state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
   useEffect(() => {
     markRead(threadId, groupId);
   }, [threadId, groupId, markRead]);
 
-  // Reset scroll tracking when thread changes so initial load scrolls to bottom
   useEffect(() => {
     isInitialLoad.current = true;
     prevMsgCountRef.current = 0;
@@ -632,12 +681,45 @@ export function ThreadDetail({
         })
       );
     },
-    // No onSuccess invalidation — the optimistic update in onMutate is authoritative.
-    // onError rolls back by refetching.
     onError: () => {
       utils.messages.list.invalidate({ threadId });
     },
   });
+
+  const deleteMessage = trpc.messages.deleteMessage.useMutation({
+    onMutate: ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, is_deleted: true } : m))
+      );
+    },
+    onError: () => {
+      utils.messages.list.invalidate({ threadId });
+    },
+  });
+
+  const editMessage = trpc.messages.edit.useMutation({
+    onSuccess: (updated) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === updated.id ? { ...m, body: updated.body, edited_at: updated.edited_at } : m
+        )
+      );
+      setEditingMessageId(null);
+      setEditBody("");
+    },
+  });
+
+  const { data: workspaceMembers } = trpc.messages.groupMembers.useQuery(
+    { groupId },
+    { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
+  );
+
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null || !workspaceMembers) return [];
+    if (mentionQuery === "") return workspaceMembers;
+    const q = mentionQuery.toLowerCase();
+    return workspaceMembers.filter((m) => m.display_name.toLowerCase().includes(q));
+  }, [mentionQuery, workspaceMembers]);
 
   const { data: loadedMessages, isLoading } = trpc.messages.list.useQuery(
     { threadId },
@@ -650,7 +732,6 @@ export function ThreadDetail({
         messages: Message[];
         hasMore: boolean;
       };
-      // Assign staggered delays for the initial batch, capped so long threads don't wait forever
       initialDelays.current = new Map(
         msgs.map((m, i) => [m.id, Math.min(i * 30, 600)])
       );
@@ -674,7 +755,6 @@ export function ThreadDetail({
     }
 
     if (isInitialLoad.current) {
-      // Instant scroll on first load — no janky smooth-scroll through 50 messages
       bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
       isInitialLoad.current = false;
       prevMsgCountRef.current = count;
@@ -682,7 +762,6 @@ export function ThreadDetail({
     }
 
     if (count > prevMsgCountRef.current) {
-      // Only auto-scroll for new messages, and only if user is already near the bottom
       const container = scrollContainerRef.current;
       if (container) {
         const distFromBottom =
@@ -696,7 +775,6 @@ export function ThreadDetail({
     prevMsgCountRef.current = count;
   }, [messages, highlightMessageId]);
 
-  // Fetch current user info for typing presence
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -710,7 +788,6 @@ export function ThreadDetail({
     });
   }, []);
 
-  // Presence channel — typing indicators
   useEffect(() => {
     if (!myInfo) return;
     const supabase = createClient();
@@ -741,7 +818,7 @@ export function ThreadDetail({
     };
   }, [threadId, myInfo]);
 
-  // Realtime: new messages
+  // Realtime: new messages + edits
   useEffect(() => {
     const supabase = createClient();
 
@@ -760,9 +837,12 @@ export function ThreadDetail({
             id: string;
             body: string;
             created_at: string;
+            edited_at: string | null;
+            is_deleted: boolean;
             user_id: string;
             thread_id: string;
             attachments: Attachment[];
+            reply_to_id: string | null;
           };
 
           const { data: profile } = await supabase
@@ -775,9 +855,28 @@ export function ThreadDetail({
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [
               ...prev,
-              { ...newMsg, profiles: profile ?? null, reactions: REACTION_DEFAULTS },
+              { ...newMsg, is_deleted: newMsg.is_deleted ?? false, profiles: profile ?? null, reactions: REACTION_DEFAULTS, reply_to: null },
             ];
           });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `thread_id=eq.${threadId}`,
+        },
+        (payload) => {
+          const updated = payload.new as { id: string; body: string; edited_at: string | null; is_deleted: boolean };
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === updated.id
+                ? { ...m, body: updated.body, edited_at: updated.edited_at ?? null, is_deleted: updated.is_deleted ?? false }
+                : m
+            )
+          );
         }
       )
       .subscribe();
@@ -787,7 +886,6 @@ export function ThreadDetail({
     };
   }, [threadId]);
 
-  // Realtime: thread status
   useEffect(() => {
     const supabase = createClient();
 
@@ -838,7 +936,6 @@ export function ThreadDetail({
       };
       setHasMore(more);
       setMessages((prev) => [...older, ...prev]);
-      // Restore scroll position so the viewport doesn't jump to the top
       requestAnimationFrame(() => {
         if (container) {
           container.scrollTop = container.scrollHeight - prevScrollHeight;
@@ -860,7 +957,6 @@ export function ThreadDetail({
 
     return Promise.all(
       files.map(async (raw) => {
-        // Resize images before upload
         const file = await resizeImageIfNeeded(raw);
         const ext = file.name.split(".").pop() ?? "bin";
         const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
@@ -874,7 +970,7 @@ export function ThreadDetail({
         return {
           url: publicUrl,
           type: file.type.startsWith("image/") ? "image" : ("audio" as const),
-          name: raw.name, // keep original name for display
+          name: raw.name,
         };
       })
     );
@@ -887,8 +983,42 @@ export function ThreadDetail({
     }
   }
 
+  function insertMention(name: string) {
+    const cursor = textareaRef.current?.selectionStart ?? body.length;
+    const textBeforeCursor = body.slice(0, cursor);
+    const lastAtIdx = textBeforeCursor.lastIndexOf("@");
+    const newBody = body.slice(0, lastAtIdx) + "@" + name + " " + body.slice(cursor);
+    setBody(newBody);
+    setMentionQuery(null);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newCursor = lastAtIdx + name.length + 2;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newCursor, newCursor);
+      }
+    }, 0);
+  }
+
   function handleBodyChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setBody(e.target.value);
+    const val = e.target.value;
+    setBody(val);
+
+    // Detect @mention
+    const cursor = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursor);
+    const lastAtIdx = textBeforeCursor.lastIndexOf("@");
+    if (lastAtIdx >= 0) {
+      const partial = textBeforeCursor.slice(lastAtIdx + 1);
+      if (partial.length <= 40 && !partial.includes("\n") && !partial.includes("@")) {
+        setMentionQuery(partial);
+        setMentionIndex(0);
+      } else {
+        setMentionQuery(null);
+      }
+    } else {
+      setMentionQuery(null);
+    }
+
     if (presenceChannelRef.current && myInfo) {
       presenceChannelRef.current.track({ display_name: myInfo.display_name, typing: true });
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -909,9 +1039,16 @@ export function ThreadDetail({
       if (pendingFiles.length > 0) {
         attachments = await uploadFiles(pendingFiles);
       }
-      sendMessage.mutate({ threadId, body: body.trim(), attachments });
+      sendMessage.mutate({
+        threadId,
+        body: body.trim(),
+        attachments,
+        replyToId: replyingTo?.id,
+      });
       setBody("");
       setPendingFiles([]);
+      setReplyingTo(null);
+      setMentionQuery(null);
       textareaRef.current?.focus();
     } catch {
       setUploadError("Upload failed. Try again.");
@@ -921,10 +1058,36 @@ export function ThreadDetail({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => Math.min(i + 1, mentionSuggestions.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(mentionSuggestions[mentionIndex].display_name);
+        return;
+      }
+      if (e.key === "Escape") {
+        setMentionQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  }
+
+  function handleEditSubmit(messageId: string) {
+    if (!editBody.trim() || editMessage.isPending) return;
+    editMessage.mutate({ messageId, body: editBody.trim() });
   }
 
   function showError(msg: string) {
@@ -952,7 +1115,6 @@ export function ThreadDetail({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Group messages by date — memoized so it doesn't re-run on unrelated state changes
   const messagesByDate = useMemo(() => {
     const groups: Array<{ date: string; messages: Message[] }> = [];
     for (const msg of messages) {
@@ -970,6 +1132,8 @@ export function ThreadDetail({
   const isDone = threadStatus === "DONE";
   const canSend = !isDone && (body.trim() || pendingFiles.length > 0) && !sendMessage.isPending && !uploading;
 
+  const members = workspaceMembers ?? [];
+
   const trashIcon = (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" />
@@ -983,9 +1147,7 @@ export function ThreadDetail({
     <div className="flex-1 flex flex-col h-full min-w-0 bg-surface">
       {/* Thread header */}
       <header className="border-b border-border flex-shrink-0">
-        {/* Top row: back (mobile) + title + desktop controls */}
         <div className="px-3 md:px-6 flex items-center gap-2 md:gap-4 h-12 md:h-auto md:py-[14px]">
-          {/* Back button — mobile only */}
           <button
             onClick={() => router.push(`/g/${groupId}`)}
             className="md:hidden w-11 h-full flex items-center justify-center -ml-1 flex-shrink-0 text-muted hover:text-ink transition-colors"
@@ -996,7 +1158,6 @@ export function ThreadDetail({
             </svg>
           </button>
 
-          {/* Title */}
           <div className="flex-1 min-w-0">
             <h1 className="font-mono text-sm font-semibold text-ink truncate">
               <span className="text-muted-2"># </span>
@@ -1004,7 +1165,6 @@ export function ThreadDetail({
             </h1>
           </div>
 
-          {/* Desktop: status + delete */}
           <div className="hidden md:flex items-center gap-3 flex-shrink-0">
             <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
             {confirmDelete ? (
@@ -1024,7 +1184,6 @@ export function ThreadDetail({
             )}
           </div>
 
-          {/* Mobile: delete icon or confirm */}
           {confirmDelete ? (
             <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
               <span className="font-mono text-[10px] text-red-600 uppercase">delete?</span>
@@ -1040,7 +1199,6 @@ export function ThreadDetail({
           )}
         </div>
 
-        {/* Mobile status row — full-width below title, hidden during delete confirm */}
         {!confirmDelete && (
           <div className="md:hidden px-3 pb-2">
             <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
@@ -1084,7 +1242,6 @@ export function ThreadDetail({
             {messagesByDate.map(({ date, messages: dayMessages }) => {
               return (
             <div key={date}>
-              {/* Date divider */}
               <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-border" />
                 <span className="font-mono text-[10px] text-muted uppercase tracking-[0.14em]">
@@ -1101,6 +1258,8 @@ export function ThreadDetail({
                     new Date(prevMsg.created_at).getTime() <
                     5 * 60_000;
                 const name = msg.profiles?.display_name ?? "Unknown";
+                const isOwnMessage = msg.user_id === myInfo?.id;
+                const isEditing = editingMessageId === msg.id;
 
                 return (
                   <div
@@ -1146,38 +1305,148 @@ export function ThreadDetail({
                       )}
 
                       <div className="relative">
-                        {msg.body && (
-                          <p className="text-[13.5px] leading-[1.55] text-ink whitespace-pre-wrap break-words">
-                            {msg.body}
-                          </p>
+                        {/* Reply quote */}
+                        {msg.reply_to && (
+                          <button
+                            className="flex items-start gap-1.5 mb-1 border-l-2 border-border pl-2 text-left w-full hover:border-ink/40 transition-colors group/reply"
+                            onClick={() => {
+                              const el = document.getElementById(`message-${msg.reply_to!.id}`);
+                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }}
+                          >
+                            <div className="min-w-0">
+                              <span className="font-mono text-[10px] text-muted font-semibold">
+                                {msg.reply_to.author_name}
+                              </span>
+                              <p className="text-[12px] text-muted truncate leading-snug">
+                                {msg.reply_to.body}
+                              </p>
+                            </div>
+                          </button>
                         )}
 
-                        {/* Hover reaction picker */}
-                        <div
-                          className="msg-actions absolute -top-[14px] right-0 flex gap-0.5 bg-surface-2 border border-border p-0.5"
-                          style={{ opacity: 0, transition: "opacity 160ms ease" }}
-                        >
-                          {(["👍", "👎", "❓"] as const).map((emoji) => (
+                        {/* Deleted message tombstone */}
+                        {msg.is_deleted ? (
+                          <p className="text-[13px] text-muted italic font-mono">
+                            message deleted
+                          </p>
+                        ) : isEditing ? (
+                          <div className="mt-0.5">
+                            <textarea
+                              value={editBody}
+                              onChange={(e) => setEditBody(e.target.value)}
+                              className="w-full border border-pastel-deep bg-surface-2 px-2.5 py-2 font-sans text-[13.5px] leading-[1.55] text-ink resize-none outline-none focus:ring-0"
+                              style={{ boxShadow: "0 0 0 3px var(--pastel-tint)" }}
+                              rows={Math.max(2, editBody.split("\n").length)}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                  setEditingMessageId(null);
+                                  setEditBody("");
+                                }
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleEditSubmit(msg.id);
+                                }
+                              }}
+                            />
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                onClick={() => handleEditSubmit(msg.id)}
+                                disabled={editMessage.isPending || !editBody.trim()}
+                                className="font-mono text-[10px] uppercase tracking-wider bg-ink text-surface px-2.5 py-1 hover:bg-ink/90 disabled:opacity-40 transition-colors"
+                              >
+                                {editMessage.isPending ? "…" : "save"}
+                              </button>
+                              <button
+                                onClick={() => { setEditingMessageId(null); setEditBody(""); }}
+                                className="font-mono text-[10px] uppercase tracking-wider text-muted hover:text-ink transition-colors"
+                              >
+                                cancel
+                              </button>
+                              <span className="font-mono text-[10px] text-muted-2 ml-1">esc · ⏎ save</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {msg.body && (
+                              <p className="text-[13.5px] leading-[1.55] text-ink whitespace-pre-wrap break-words">
+                                {renderBody(msg.body, members, myInfo?.id ?? "")}
+                              </p>
+                            )}
+                            {msg.edited_at && (
+                              <span className="font-mono text-[10px] text-muted-2 ml-0.5">(edited)</span>
+                            )}
+                          </>
+                        )}
+
+                        {/* Hover action bar */}
+                        {!isEditing && !msg.is_deleted && (
+                          <div
+                            className="msg-actions absolute -top-[14px] right-0 flex gap-0.5 bg-surface-2 border border-border p-0.5"
+                            style={{ opacity: 0, transition: "opacity 160ms ease" }}
+                          >
+                            {/* Reply button */}
                             <button
-                              key={emoji}
-                              onClick={() =>
-                                toggleReaction.mutate({ messageId: msg.id, type: emoji })
-                              }
-                              className="px-1.5 py-0.5 text-sm hover:scale-125 transition-transform border-none bg-transparent cursor-pointer"
+                              onClick={() => {
+                                setReplyingTo({
+                                  id: msg.id,
+                                  body: msg.body,
+                                  authorName: name,
+                                });
+                                textareaRef.current?.focus();
+                              }}
+                              title="Reply"
+                              className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
                             >
-                              {emoji}
+                              ↩
                             </button>
-                          ))}
-                        </div>
+
+                            {/* Edit + delete — own messages only */}
+                            {isOwnMessage && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingMessageId(msg.id);
+                                    setEditBody(msg.body);
+                                  }}
+                                  title="Edit"
+                                  className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  onClick={() => deleteMessage.mutate({ messageId: msg.id })}
+                                  title="Delete"
+                                  className="px-1.5 py-0.5 text-[13px] text-muted hover:text-red-500 hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
+                                >
+                                  ×
+                                </button>
+                              </>
+                            )}
+
+                            {/* Reaction buttons */}
+                            {(["👍", "👎", "❓"] as const).map((emoji) => (
+                              <button
+                                key={emoji}
+                                onClick={() =>
+                                  toggleReaction.mutate({ messageId: msg.id, type: emoji })
+                                }
+                                className="px-1.5 py-0.5 text-sm hover:scale-125 transition-transform border-none bg-transparent cursor-pointer"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Attachments */}
-                      {(msg.attachments ?? []).length > 0 && (() => {
+                      {!msg.is_deleted && (msg.attachments ?? []).length > 0 && (() => {
                         const imgAtts = msg.attachments.filter((a) => a.type === "image");
                         const audioAtts = msg.attachments.filter((a) => a.type === "audio");
                         return (
                           <div className="mt-2 space-y-2">
-                            {/* Single image: classic polaroid */}
                             {imgAtts.length === 1 && (
                               <button
                                 onClick={() => setActiveLightbox(imgAtts[0])}
@@ -1203,11 +1472,9 @@ export function ThreadDetail({
                                 </span>
                               </button>
                             )}
-                            {/* Multiple images: gallery fan effect */}
                             {imgAtts.length >= 2 && (
                               <ImageGallery attachments={imgAtts} onOpen={setActiveLightbox} />
                             )}
-                            {/* Audio attachments */}
                             {audioAtts.length > 0 && (
                               <div className="flex flex-wrap gap-2">
                                 {audioAtts.map((att, i) => (
@@ -1231,7 +1498,7 @@ export function ThreadDetail({
                       })()}
 
                       {/* Reaction chips */}
-                      {(msg.reactions ?? []).some((r) => r.count > 0) && (
+                      {!msg.is_deleted && (msg.reactions ?? []).some((r) => r.count > 0) && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {msg.reactions
                             .filter((r) => r.count > 0)
@@ -1280,7 +1547,26 @@ export function ThreadDetail({
       )}
 
       {/* Composer */}
-      <div className="px-4 md:px-6 pt-3 md:pt-[14px] pb-4 border-t border-border flex-shrink-0 pb-safe">
+      <div className="px-4 md:px-6 pt-3 md:pt-[14px] pb-4 border-t border-border flex-shrink-0 pb-safe relative">
+
+        {/* @mention suggestions dropdown */}
+        {mentionSuggestions.length > 0 && (
+          <div className="absolute bottom-full left-4 right-4 md:left-6 md:right-6 mb-1 bg-surface border border-border shadow-lg z-20">
+            {mentionSuggestions.map((member, i) => (
+              <button
+                key={member.id}
+                className={`w-full text-left px-3 py-2 font-mono text-[12px] text-ink transition-colors border-b border-border last:border-b-0 ${
+                  i === mentionIndex ? "bg-surface-2" : "hover:bg-surface-2"
+                }`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertMention(member.display_name)}
+              >
+                <span className="text-muted">@</span>{member.display_name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {isDone && (
           <div className="flex items-center justify-center gap-2 py-2.5 mb-0 border border-done-tint bg-done-tint/50">
             <span className="font-mono text-[11px] text-done-ink uppercase tracking-[0.12em]">
@@ -1296,6 +1582,26 @@ export function ThreadDetail({
             <button
               onClick={() => setUploadError(null)}
               className="font-mono text-[13px] leading-none text-red-400 hover:text-red-700 transition-colors flex-shrink-0 mt-px"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Reply banner */}
+        {!isDone && replyingTo && (
+          <div className="flex items-start gap-2 mb-2 pl-3 pr-2 py-2 border-l-2 border-pastel-deep bg-surface-2">
+            <div className="flex-1 min-w-0">
+              <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
+                replying to {replyingTo.authorName}
+              </span>
+              <p className="text-[12px] text-muted truncate mt-0.5 leading-snug">
+                {replyingTo.body || "(attachment)"}
+              </p>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="font-mono text-base leading-none text-muted hover:text-ink transition-colors flex-shrink-0 mt-0.5"
             >
               ×
             </button>
@@ -1402,7 +1708,7 @@ export function ThreadDetail({
 
         {/* Composer hint */}
         {!isDone && <div className="flex items-center justify-between mt-1.5">
-          <span className="font-mono text-[10px] text-muted-2">⏎ send · ⇧⏎ newline</span>
+          <span className="font-mono text-[10px] text-muted-2">⏎ send · ⇧⏎ newline · @ mention</span>
           <span className="font-mono text-[10px] text-muted-2 flex items-center gap-1">
             <span
               className="w-[5px] h-[5px] rounded-full"
