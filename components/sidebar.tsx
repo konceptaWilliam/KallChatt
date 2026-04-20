@@ -2,12 +2,139 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SearchDialog } from "./search-dialog";
 import { useUnread } from "@/lib/unread-context";
 import { useMobileSidebar } from "@/lib/mobile-sidebar-context";
+import { trpc } from "@/lib/trpc/client";
 
 type Group = { id: string; name: string };
+
+function CreateGroupModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const [name, setName] = useState("");
+  const [emails, setEmails] = useState("");
+  const [step, setStep] = useState<"form" | "done">("form");
+  const [inviteLinks, setInviteLinks] = useState<{ email: string; url: string }[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const createGroup = trpc.groups.create.useMutation();
+  const sendInvite = trpc.invites.send.useMutation();
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    const group = await createGroup.mutateAsync({ name: name.trim() });
+    utils.groups.list.invalidate();
+
+    const emailList = emails
+      .split(/[\s,;]+/)
+      .map((e) => e.trim())
+      .filter((e) => e.includes("@"));
+
+    const links: { email: string; url: string }[] = [];
+    for (const email of emailList) {
+      try {
+        const result = await sendInvite.mutateAsync({ email, groupId: group.id });
+        links.push({ email, url: (result as unknown as { inviteUrl: string }).inviteUrl });
+      } catch {
+        // best-effort
+      }
+    }
+
+    if (links.length > 0) {
+      setInviteLinks(links);
+      setStep("done");
+    } else {
+      onClose();
+      router.push(`/g/${group.id}`);
+    }
+  }
+
+  function copyLink(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopied(url);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-surface border border-border max-w-sm w-full mx-4 p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        {step === "form" ? (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-mono text-sm font-semibold text-ink">New group</p>
+              <button onClick={onClose} className="font-mono text-[14px] text-muted hover:text-ink">×</button>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="font-mono text-[10px] text-muted uppercase tracking-wider block mb-1">Group name</label>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={80}
+                  placeholder="e.g. Design"
+                  className="w-full border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+                />
+              </div>
+              <div>
+                <label className="font-mono text-[10px] text-muted uppercase tracking-wider block mb-1">Invite by email <span className="normal-case">(optional, comma-separated)</span></label>
+                <input
+                  value={emails}
+                  onChange={(e) => setEmails(e.target.value)}
+                  placeholder="alice@example.com, bob@example.com"
+                  className="w-full border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={!name.trim() || createGroup.isPending || sendInvite.isPending}
+                  className="flex-1 bg-ink text-surface font-mono text-sm py-2 disabled:opacity-40"
+                >
+                  {createGroup.isPending || sendInvite.isPending ? "Creating…" : "Create group"}
+                </button>
+                <button type="button" onClick={onClose} className="font-mono text-sm text-muted hover:text-ink px-3 py-2">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-mono text-sm font-semibold text-ink">Group created</p>
+              <button onClick={onClose} className="font-mono text-[14px] text-muted hover:text-ink">×</button>
+            </div>
+            <p className="font-mono text-[11px] text-muted mb-3">Share these invite links — email delivery may be delayed.</p>
+            <div className="space-y-2">
+              {inviteLinks.map(({ email, url }) => (
+                <div key={email} className="border border-border p-2">
+                  <p className="font-mono text-[11px] text-ink mb-1">{email}</p>
+                  <div className="flex gap-2 items-center">
+                    <span className="font-mono text-[10px] text-muted truncate flex-1">{url}</span>
+                    <button
+                      onClick={() => copyLink(url)}
+                      className="font-mono text-[10px] text-muted hover:text-ink flex-shrink-0"
+                    >
+                      {copied === url ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={onClose} className="mt-3 w-full bg-ink text-surface font-mono text-sm py-2">
+              Done
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function Sidebar({
   groups,
@@ -20,6 +147,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const { groupCounts, groupUrgentCounts } = useUnread();
   const { isOpen, close } = useMobileSidebar();
@@ -87,11 +215,18 @@ export function Sidebar({
           <span className="font-mono text-[11px] flex-1 text-left">search</span>
         </button>
 
-        {/* Group list */}
-        <div className="px-[18px] pb-2">
+        {/* Group list header */}
+        <div className="px-[18px] pb-2 flex items-center justify-between">
           <span className="font-mono text-[10px] text-muted-2 uppercase tracking-[0.18em]">
             Groups
           </span>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="font-mono text-[14px] text-muted-2 hover:text-ink transition-colors leading-none"
+            title="New group"
+          >
+            +
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
@@ -171,6 +306,7 @@ export function Sidebar({
       </aside>
 
       {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}
+      {createOpen && <CreateGroupModal onClose={() => setCreateOpen(false)} />}
     </>
   );
 }

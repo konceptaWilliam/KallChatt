@@ -367,12 +367,16 @@ export const messagesRouter = router({
 
       const { data } = await admin
         .from("group_memberships")
-        .select("profiles(id, display_name)")
+        .select("role, profiles(id, display_name, avatar_url)")
         .eq("group_id", input.groupId);
 
       return ((data ?? [])
-        .map((row) => row.profiles as unknown as { id: string; display_name: string } | null)
-        .filter(Boolean) as { id: string; display_name: string }[])
+        .map((row) => {
+          const p = row.profiles as unknown as { id: string; display_name: string; avatar_url: string | null } | null;
+          if (!p) return null;
+          return { ...p, role: row.role as string };
+        })
+        .filter(Boolean) as { id: string; display_name: string; avatar_url: string | null; role: string }[])
         .sort((a, b) => a.display_name.localeCompare(b.display_name));
     }),
 });

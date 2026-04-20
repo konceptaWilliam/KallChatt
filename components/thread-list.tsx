@@ -40,9 +40,12 @@ function formatRelative(dateStr: string): string {
 }
 
 function sortThreads(threads: Thread[]): Thread[] {
-  return [...threads].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
+  return [...threads].sort((a, b) => {
+    const aDone = a.status === "DONE" ? 1 : 0;
+    const bDone = b.status === "DONE" ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 }
 
 function UnreadPrism({ isUrgent }: { isUrgent: boolean }) {
@@ -58,9 +61,186 @@ function UnreadPrism({ isUrgent }: { isUrgent: boolean }) {
   );
 }
 
+function MemberAvatar({ member }: { member: { display_name: string; avatar_url: string | null } }) {
+  return (
+    <div
+      className="w-5 h-5 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[8px] font-semibold"
+      style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
+    >
+      {member.avatar_url
+        ? <img src={member.avatar_url} alt={member.display_name} className="w-full h-full object-cover" />
+        : member.display_name.slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
+function GroupInfoModal({ groupId, groupName, onClose }: { groupId: string; groupName: string; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const { data: members = [], isLoading } = trpc.messages.groupMembers.useQuery({ groupId });
+  const { data: pendingInvites = [] } = trpc.invites.list.useQuery({ groupId }, { retry: false });
+  const { data: profile } = trpc.profile.get.useQuery();
+
+  const myMembership = members.find((m) => m.id === profile?.id);
+  const isAdmin = myMembership?.role === "ADMIN";
+
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(groupName);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const rename = trpc.groups.rename.useMutation({
+    onSuccess: () => { utils.groups.list.invalidate(); setEditing(false); },
+  });
+
+  const sendInvite = trpc.invites.send.useMutation({
+    onSuccess: (data) => {
+      utils.invites.list.invalidate({ groupId });
+      setInviteEmail("");
+      setInviteLink((data as unknown as { inviteUrl: string }).inviteUrl);
+    },
+  });
+
+  const revokeInvite = trpc.invites.revoke.useMutation({
+    onSuccess: () => utils.invites.list.invalidate({ groupId }),
+  });
+
+  const removeMember = trpc.groups.removeMember.useMutation({
+    onSuccess: () => utils.messages.groupMembers.invalidate({ groupId }),
+  });
+
+  const transferAdmin = trpc.groups.transferAdmin.useMutation({
+    onSuccess: () => { utils.messages.groupMembers.invalidate({ groupId }); onClose(); },
+  });
+
+  function copyLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const admins = members.filter((m) => m.role === "ADMIN");
+  const regularMembers = members.filter((m) => m.role !== "ADMIN");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-surface border border-border max-w-sm w-full mx-4 p-4 shadow-lg max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          {editing ? (
+            <form className="flex gap-2 flex-1 mr-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) rename.mutate({ groupId, name: name.trim() }); }}>
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80}
+                className="flex-1 border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-ink focus:outline-none focus:border-ink" />
+              <button type="submit" disabled={!name.trim() || rename.isPending} className="font-mono text-[10px] bg-ink text-surface px-2 py-1 disabled:opacity-40">Save</button>
+              <button type="button" onClick={() => { setEditing(false); setName(groupName); }} className="font-mono text-[10px] text-muted hover:text-ink px-1">×</button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 mr-2">
+              <p className="font-mono text-sm font-semibold text-ink">{groupName}</p>
+              {isAdmin && <button onClick={() => setEditing(true)} className="font-mono text-[10px] text-muted hover:text-ink">rename</button>}
+            </div>
+          )}
+          <button onClick={onClose} className="font-mono text-[14px] text-muted hover:text-ink flex-shrink-0">×</button>
+        </div>
+
+        {isLoading ? <div className="h-16 bg-border/40 animate-pulse" /> : (
+          <div className="space-y-4">
+            {/* Invite section (admin only) */}
+            {isAdmin && (
+              <div>
+                <p className="font-mono text-[10px] text-muted uppercase tracking-wider mb-2">Invite</p>
+                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (inviteEmail.trim()) sendInvite.mutate({ email: inviteEmail.trim(), groupId }); }}>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="flex-1 border border-border bg-surface-2 px-2 py-1 font-mono text-[11px] text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+                  />
+                  <button type="submit" disabled={!inviteEmail.trim() || sendInvite.isPending} className="font-mono text-[10px] bg-ink text-surface px-2 py-1 disabled:opacity-40">
+                    Send
+                  </button>
+                </form>
+                {inviteLink && (
+                  <div className="mt-2 border border-border p-2 flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-muted flex-1 truncate">{inviteLink}</span>
+                    <button onClick={copyLink} className="font-mono text-[10px] text-muted hover:text-ink flex-shrink-0">
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                )}
+                {/* Pending invites */}
+                {(pendingInvites as { id: string; email: string }[]).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {(pendingInvites as { id: string; email: string }[]).map((inv) => (
+                      <div key={inv.id} className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-muted">{inv.email} · pending</span>
+                        <button onClick={() => revokeInvite.mutate({ inviteId: inv.id })} className="font-mono text-[10px] text-muted hover:text-red-600">revoke</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Admins */}
+            {admins.length > 0 && (
+              <div>
+                <p className="font-mono text-[10px] text-muted uppercase tracking-wider mb-2">Admins</p>
+                <div className="space-y-1.5">
+                  {admins.map((m) => (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <MemberAvatar member={m} />
+                      <span className="font-mono text-[12px] text-ink flex-1">{m.display_name}</span>
+                      {isAdmin && m.id !== profile?.id && (
+                        <button onClick={() => removeMember.mutate({ groupId, userId: m.id })} className="font-mono text-[10px] text-muted hover:text-red-600">remove</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Members */}
+            {regularMembers.length > 0 && (
+              <div>
+                <p className="font-mono text-[10px] text-muted uppercase tracking-wider mb-2">Members</p>
+                <div className="space-y-1.5">
+                  {regularMembers.map((m) => (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <MemberAvatar member={m} />
+                      <span className="font-mono text-[12px] text-ink flex-1">{m.display_name}</span>
+                      {isAdmin && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { if (confirm(`Transfer admin to ${m.display_name}? You will become a member.`)) transferAdmin.mutate({ groupId, newAdminId: m.id }); }}
+                            className="font-mono text-[10px] text-muted hover:text-ink"
+                          >
+                            make admin
+                          </button>
+                          <button onClick={() => removeMember.mutate({ groupId, userId: m.id })} className="font-mono text-[10px] text-muted hover:text-red-600">remove</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ThreadList({ groupId, groupName }: { groupId: string; groupName: string }) {
   const pathname = usePathname();
   const [showNewThread, setShowNewThread] = useState(false);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
   const utils = trpc.useUtils();
   const { threadCounts, setThreadCount } = useUnread();
   const { open: openSidebar } = useMobileSidebar();
@@ -122,6 +302,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
         isOnThread ? "hidden md:flex" : "flex"
       } flex-col w-full md:w-[336px] flex-shrink-0 border-r border-border h-full`}
     >
+      {showGroupInfo && <GroupInfoModal groupId={groupId} groupName={groupName} onClose={() => setShowGroupInfo(false)} />}
       {/* Header */}
       <header className="px-3 md:px-[18px] pt-2 md:pt-[14px] pb-2 md:pb-[10px] border-b border-border">
         <div className="flex items-center gap-1">
@@ -138,9 +319,12 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
             </svg>
           </button>
 
-          <span className="font-mono text-sm font-semibold text-ink flex-1 truncate min-w-0">
+          <button
+            onClick={() => setShowGroupInfo(true)}
+            className="font-mono text-sm font-semibold text-ink flex-1 truncate min-w-0 text-left hover:text-muted transition-colors"
+          >
             <span className="text-muted-2">· </span>{groupName}
-          </span>
+          </button>
 
           <button
             onClick={() => setShowNewThread(true)}

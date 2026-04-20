@@ -11,7 +11,7 @@ export const profileRouter = router({
 
     const { data, error } = await admin
       .from("profiles")
-      .select("id, display_name, email, avatar_url, role")
+      .select("id, display_name, email, avatar_url")
       .eq("id", profile.id)
       .single();
 
@@ -41,7 +41,7 @@ export const profileRouter = router({
         .from("profiles")
         .update(updates)
         .eq("id", profile.id)
-        .select("id, display_name, email, avatar_url, role")
+        .select("id, display_name, email, avatar_url")
         .single();
 
       if (error) {

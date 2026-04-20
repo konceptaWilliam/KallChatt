@@ -12,7 +12,6 @@ export const onboardingRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Require an authenticated user
       if (!ctx.user) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
@@ -21,7 +20,6 @@ export const onboardingRouter = router({
       const userId = ctx.user.id;
       const email = ctx.user.email ?? "";
 
-      // Check if profile already exists
       const { data: existing } = await admin
         .from("profiles")
         .select("id")
@@ -32,49 +30,10 @@ export const onboardingRouter = router({
         return { success: true };
       }
 
-      let workspaceId: string;
-      let role: "ADMIN" | "MEMBER" = "ADMIN";
-
-      if (input.inviteToken) {
-        // Look up invite to find the workspace
-        const { data: invite } = await admin
-          .from("invites")
-          .select("*")
-          .eq("token", input.inviteToken)
-          .eq("accepted", false)
-          .single();
-
-        if (invite) {
-          workspaceId = invite.workspace_id;
-          role = "MEMBER";
-        } else {
-          // Invite not found or already used — create own workspace
-          const { data: ws, error } = await admin
-            .from("workspaces")
-            .insert({ name: `${input.displayName}'s workspace` })
-            .select()
-            .single();
-          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
-          workspaceId = ws.id;
-        }
-      } else {
-        // No invite — create a new workspace
-        const { data: ws, error } = await admin
-          .from("workspaces")
-          .insert({ name: `${input.displayName}'s workspace` })
-          .select()
-          .single();
-        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
-        workspaceId = ws.id;
-      }
-
-      // Create profile
       const { error: profileError } = await admin.from("profiles").insert({
         id: userId,
-        workspace_id: workspaceId,
         display_name: input.displayName,
         email,
-        role,
       });
 
       if (profileError) {

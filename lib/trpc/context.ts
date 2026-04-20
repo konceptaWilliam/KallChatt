@@ -46,11 +46,9 @@ export async function createContext({ req }: FetchCreateContextFnOptions) {
 
 export type Profile = {
   id: string;
-  workspace_id: string;
   display_name: string;
   email: string;
   avatar_url: string | null;
-  role: "ADMIN" | "MEMBER";
   created_at: string;
 };
 

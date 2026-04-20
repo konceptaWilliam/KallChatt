@@ -80,8 +80,6 @@ export default function InvitePage({
     );
   }
 
-  const workspaceName =
-    (invite.workspaces as { name: string } | null)?.name ?? "a workspace";
   const inviterName =
     (invite.profiles as { display_name: string } | null)?.display_name ??
     "Someone";
@@ -99,7 +97,7 @@ export default function InvitePage({
             </p>
             <p className="text-sm text-muted">
               We sent a magic link to <strong>{invite.email}</strong>. Click it
-              to join <strong>{workspaceName}</strong>.
+              to join <strong>Kallchatt</strong>.
             </p>
           </div>
         </div>
@@ -124,7 +122,7 @@ export default function InvitePage({
             <strong>{inviterName}</strong> has invited you to join
           </p>
           <p className="font-mono text-lg font-semibold text-ink">
-            {workspaceName}
+            Kallchatt
           </p>
         </div>
 

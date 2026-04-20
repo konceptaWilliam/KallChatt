@@ -113,68 +113,54 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
   const totalVotes = poll.options.reduce((s, o) => s + o.vote_count, 0);
 
   return (
-    <div className="mt-1 border border-border bg-surface-2 p-3 max-w-sm">
-      <p className="font-mono text-[12px] font-semibold text-ink mb-2">{poll.question}</p>
-      <div className="space-y-1.5">
+    <div className="mt-1 border border-border bg-surface p-4 max-w-sm shadow-lg">
+      <p className="font-mono text-[12px] font-semibold text-ink mb-1">{poll.question}</p>
+      <p className="font-mono text-[10px] text-muted mb-3">{totalVotes} total vote{totalVotes !== 1 ? "s" : ""}</p>
+      <div className="space-y-3">
         {poll.options.map((opt) => {
           const pct = totalVotes > 0 ? Math.round((opt.vote_count / totalVotes) * 100) : 0;
           return (
-            <button
-              key={opt.id}
-              onClick={() => vote.mutate({ pollOptionId: opt.id })}
-              className={`w-full text-left relative overflow-hidden border transition-colors ${
-                opt.user_voted
-                  ? "border-pastel-deep bg-pastel-tint"
-                  : "border-border hover:border-pastel-deep"
-              }`}
-            >
-              {totalVotes > 0 && (
-                <div
-                  className="absolute inset-y-0 left-0 bg-pastel/40 pointer-events-none"
-                  style={{ width: `${pct}%` }}
-                />
-              )}
-              <div className="relative flex items-center justify-between px-2.5 py-1.5 gap-2">
-                <span className="font-mono text-[12px] text-ink">{opt.text}</span>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {opt.voters.length > 0 && (
-                    <div className="flex items-center -space-x-1">
-                      {opt.voters.slice(0, 5).map((v) => (
-                        <div
-                          key={v.id}
-                          title={v.display_name}
-                          className="w-4 h-4 border border-surface overflow-hidden flex items-center justify-center font-mono text-[7px] font-semibold flex-shrink-0"
-                          style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
-                        >
-                          {v.avatar_url ? (
-                            <img src={v.avatar_url} alt={v.display_name} className="w-full h-full object-cover" />
-                          ) : (
-                            v.display_name.slice(0, 1).toUpperCase()
-                          )}
-                        </div>
-                      ))}
-                      {opt.voters.length > 5 && (
-                        <div
-                          className="w-4 h-4 border border-surface flex items-center justify-center font-mono text-[7px] flex-shrink-0"
-                          style={{ background: "hsl(180 20% 80%)", color: "hsl(180 40% 28%)" }}
-                        >
-                          +{opt.voters.length - 5}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <span className="font-mono text-[10px] text-muted">
-                    {opt.vote_count} {opt.vote_count === 1 ? "vote" : "votes"}
-                  </span>
+            <div key={opt.id}>
+              <button
+                className="w-full text-left"
+                onClick={() => vote.mutate({ pollOptionId: opt.id })}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`font-mono text-[12px] ${opt.user_voted ? "text-ink font-semibold" : "text-ink"}`}>{opt.text}</span>
+                  <span className="font-mono text-[10px] text-muted ml-2 flex-shrink-0">{opt.vote_count} ({pct}%)</span>
                 </div>
-              </div>
-            </button>
+                <div className="h-1 bg-surface-2 border border-border mb-1.5">
+                  <div className={`h-full ${opt.user_voted ? "bg-pastel" : "bg-pastel/60"}`} style={{ width: `${pct}%` }} />
+                </div>
+              </button>
+              {opt.voters.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {opt.voters.map((v) => (
+                    <div key={v.id} className="flex items-center gap-1 border border-border px-1.5 py-0.5">
+                      <div
+                        className="w-4 h-4 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[7px] font-semibold"
+                        style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
+                      >
+                        {v.avatar_url ? (
+                          <img src={v.avatar_url} alt={v.display_name} className="w-full h-full object-cover" />
+                        ) : (
+                          v.display_name.slice(0, 1).toUpperCase()
+                        )}
+                      </div>
+                      <span className="font-mono text-[10px] text-ink">{v.display_name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="font-mono text-[10px] text-muted-2">No votes yet</span>
+              )}
+            </div>
           );
         })}
       </div>
       {showAddOption ? (
         <form
-          className="flex gap-1.5 mt-2"
+          className="flex gap-1.5 mt-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!newOptionText.trim()) return;
@@ -207,13 +193,10 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
       ) : (
         <button
           onClick={() => setShowAddOption(true)}
-          className="mt-2 font-mono text-[10px] text-muted hover:text-ink transition-colors"
+          className="mt-3 font-mono text-[10px] text-muted hover:text-ink transition-colors"
         >
           + add option
         </button>
-      )}
-      {totalVotes > 0 && (
-        <p className="font-mono text-[10px] text-muted-2 mt-1.5">{totalVotes} total vote{totalVotes !== 1 ? "s" : ""}</p>
       )}
     </div>
   );
