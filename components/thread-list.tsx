@@ -179,12 +179,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
             const lastAuthor = lastMessage?.profiles?.display_name?.split(" ")[0];
             const unread = isActive ? 0 : (threadCounts[thread.id] ?? 0);
 
-            const borderLeftColor =
-              thread.status === "URGENT"
-                ? "#8A4B1F"
-                : isActive
-                ? "var(--pastel-deep)"
-                : "transparent";
+            const borderLeftColor = isActive ? "var(--pastel-deep)" : "transparent";
 
             return (
               <Link
@@ -224,14 +219,20 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                 </div>
 
                 {/* Last message preview */}
-                {lastMessage && !lastMessage.is_deleted && (
+                {lastMessage && (
                   <div className="flex items-center gap-1.5 min-w-0">
-                    {lastAuthor && (
-                      <span className="font-mono text-[10px] text-muted flex-shrink-0">
-                        {lastAuthor}:
-                      </span>
+                    {lastMessage.is_deleted ? (
+                      <span className="text-xs text-muted-2 italic">deleted message</span>
+                    ) : (
+                      <>
+                        {lastAuthor && (
+                          <span className="font-mono text-[10px] text-muted flex-shrink-0">
+                            {lastAuthor}:
+                          </span>
+                        )}
+                        <span className="text-xs text-muted truncate">{lastMessage.body}</span>
+                      </>
                     )}
-                    <span className="text-xs text-muted truncate">{lastMessage.body}</span>
                   </div>
                 )}
               </Link>

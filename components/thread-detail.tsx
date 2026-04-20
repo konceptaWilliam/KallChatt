@@ -1306,7 +1306,7 @@ export function ThreadDetail({
 
                       <div className="relative">
                         {/* Reply quote */}
-                        {msg.reply_to && (
+                        {msg.reply_to && !msg.is_deleted && (
                           <button
                             className="flex items-start gap-1.5 mb-1 border-l-2 border-border pl-2 text-left w-full hover:border-ink/40 transition-colors group/reply"
                             onClick={() => {
