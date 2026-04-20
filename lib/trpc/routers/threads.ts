@@ -27,7 +27,7 @@ export const threadsRouter = router({
         .from("threads")
         .select(
           `id, title, status, created_at, updated_at, group_id, created_by,
-           messages(body, created_at, user_id, profiles(display_name))`
+           messages(body, is_deleted, created_at, user_id, profiles(display_name))`
         )
         .eq("group_id", input.groupId)
         .order("updated_at", { ascending: false })
