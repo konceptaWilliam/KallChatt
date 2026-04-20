@@ -46,8 +46,6 @@ export default async function GroupLayout({
           <Sidebar
             groups={groups}
             userDisplayName={profile.display_name}
-            userEmail={profile.email}
-            isAdmin={profile.role === "ADMIN"}
           />
           <main className="flex-1 flex overflow-hidden min-w-0">{children}</main>
         </div>

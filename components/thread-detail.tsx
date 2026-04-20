@@ -342,7 +342,7 @@ function ImageGallery({
     // Expanded width is deterministic: 130px per image + 10px gap between each.
     // Use this instead of measuring the DOM so bounds are correct even before
     // the fan animation has finished running.
-    let minX = 0, maxX = 0;
+    let minX = 0; const maxX = 0;
     const parent = containerRef.current?.parentElement;
     if (parent) {
       const expandedWidth = 130 * n + 10 * (n - 1);

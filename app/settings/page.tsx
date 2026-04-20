@@ -294,7 +294,7 @@ function MyGroupsSection() {
         <div className="h-10 bg-border/40 animate-pulse" />
       ) : (groups ?? []).length === 0 ? (
         <p className="text-xs text-muted border border-border px-4 py-3">
-          You're not in any groups yet.
+          You&apos;re not in any groups yet.
         </p>
       ) : (
         <div className="border border-border divide-y divide-border">

@@ -13,13 +13,9 @@ type Group = { id: string; name: string };
 export function Sidebar({
   groups,
   userDisplayName,
-  userEmail,
-  isAdmin,
 }: {
   groups: Group[];
   userDisplayName: string;
-  userEmail: string;
-  isAdmin: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
