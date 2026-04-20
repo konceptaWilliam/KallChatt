@@ -8,12 +8,20 @@ const ALLOWED_EXTENSIONS = new Set([
   "mp3", "wav", "ogg", "m4a", "aac", "flac",
 ]);
 
+// Matches: /storage/v1/object/public/attachments/<uuid>/<filename>.<ext>
+const ATTACHMENT_PATH_RE = new RegExp(
+  `^/storage/v1/object/public/attachments/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[^/]+\\.([a-z0-9]+)$`,
+  "i"
+);
+
 function validateAttachmentUrl(url: string): boolean {
   try {
     const { hostname, pathname } = new URL(url);
     const supabaseHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
     if (hostname !== supabaseHost) return false;
-    const ext = pathname.split(".").pop()?.toLowerCase() ?? "";
+    const match = ATTACHMENT_PATH_RE.exec(pathname);
+    if (!match) return false;
+    const ext = match[1].toLowerCase();
     return ALLOWED_EXTENSIONS.has(ext);
   } catch {
     return false;
@@ -28,6 +36,7 @@ export const messagesRouter = router({
       z.object({
         threadId: z.string().uuid(),
         limit: z.number().min(1).max(100).default(50),
+        // created_at of the oldest loaded message — pass to load messages before it
         cursor: z.string().optional(),
       })
     )
@@ -52,21 +61,24 @@ export const messagesRouter = router({
       if (!membership) throw new TRPCError({ code: "FORBIDDEN" });
 
       const admin = createAdminClient();
+      // Fetch newest-first so the LIMIT always returns the last N messages.
+      // The cursor loads messages *older* than the oldest currently loaded message.
       let query = admin
         .from("messages")
         .select("id, body, created_at, thread_id, user_id, attachments, profiles(id, display_name, avatar_url)")
         .eq("thread_id", input.threadId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(input.limit);
 
       if (input.cursor) {
-        query = query.gt("created_at", input.cursor);
+        query = query.lt("created_at", input.cursor);
       }
 
       const { data, error } = await query;
       if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
 
-      const messageIds = (data ?? []).map((m) => m.id);
+      const rows = data ?? [];
+      const messageIds = rows.map((m) => m.id);
       const reactionRows =
         messageIds.length > 0
           ? ((await admin
@@ -75,13 +87,16 @@ export const messagesRouter = router({
               .in("message_id", messageIds)).data ?? [])
           : [];
 
-      return (data ?? []).map((m) => ({
+      // Reverse to ascending order for display (oldest first)
+      const messages = [...rows].reverse().map((m) => ({
         ...m,
         reactions: REACTION_TYPES.map((type) => {
           const users = reactionRows.filter((r) => r.message_id === m.id && r.type === type);
           return { type, count: users.length, userReacted: users.some((r) => r.user_id === profile.id) };
         }),
       }));
+
+      return { messages, hasMore: rows.length === input.limit };
     }),
 
   send: protectedProcedure

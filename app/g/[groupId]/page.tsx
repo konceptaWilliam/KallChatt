@@ -17,8 +17,8 @@ export default async function GroupPage({
   return (
     <>
       <ThreadList groupId={groupId} groupName={group?.name ?? groupId} />
-      {/* Empty state for thread detail panel */}
-      <div className="flex-1 flex items-center justify-center">
+      {/* Empty state for thread detail panel — hidden on mobile (thread list takes full width) */}
+      <div className="hidden md:flex flex-1 items-center justify-center">
         <p className="font-mono text-sm text-muted">
           Select a thread to read it
         </p>

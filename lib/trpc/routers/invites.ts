@@ -111,7 +111,7 @@ export const invitesRouter = router({
     }),
 
   getByToken: publicProcedure
-    .input(z.object({ token: z.string() }))
+    .input(z.object({ token: z.string().length(64) }))
     .query(async ({ input }) => {
       const admin = createAdminClient();
 
@@ -120,6 +120,7 @@ export const invitesRouter = router({
         .select("*, workspaces(name), profiles!invites_invited_by_fkey(display_name)")
         .eq("token", input.token)
         .eq("accepted", false)
+        .gt("expires_at", new Date().toISOString())
         .single();
 
       if (error || !data) {
@@ -130,17 +131,18 @@ export const invitesRouter = router({
     }),
 
   accept: protectedProcedure
-    .input(z.object({ token: z.string() }))
+    .input(z.object({ token: z.string().length(64) }))
     .mutation(async ({ ctx, input }) => {
       const { profile } = ctx;
       const admin = createAdminClient();
 
-      // Fetch invite
+      // Fetch invite — must be unaccepted and not expired
       const { data: invite, error: fetchError } = await admin
         .from("invites")
         .select("*")
         .eq("token", input.token)
         .eq("accepted", false)
+        .gt("expires_at", new Date().toISOString())
         .single();
 
       if (fetchError || !invite) {

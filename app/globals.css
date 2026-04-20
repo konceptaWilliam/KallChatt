@@ -31,6 +31,17 @@ body,
   height: 100%;
 }
 
+/* Dynamic viewport height — shrinks when mobile keyboard opens */
+.h-screen-dynamic {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* iOS safe-area padding for composer (home indicator bar) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

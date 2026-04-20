@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { UnreadProvider } from "@/lib/unread-context";
+import { MobileSidebarProvider } from "@/lib/mobile-sidebar-context";
 
 export default async function GroupLayout({
   children,
@@ -40,15 +41,17 @@ export default async function GroupLayout({
 
   return (
     <UnreadProvider>
-      <div className="flex h-screen overflow-hidden bg-surface">
-        <Sidebar
-          groups={groups}
-          userDisplayName={profile.display_name}
-          userEmail={profile.email}
-          isAdmin={profile.role === "ADMIN"}
-        />
-        <main className="flex-1 flex overflow-hidden">{children}</main>
-      </div>
+      <MobileSidebarProvider>
+        <div className="h-screen-dynamic flex overflow-hidden bg-surface">
+          <Sidebar
+            groups={groups}
+            userDisplayName={profile.display_name}
+            userEmail={profile.email}
+            isAdmin={profile.role === "ADMIN"}
+          />
+          <main className="flex-1 flex overflow-hidden min-w-0">{children}</main>
+        </div>
+      </MobileSidebarProvider>
     </UnreadProvider>
   );
 }

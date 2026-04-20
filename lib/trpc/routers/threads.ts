@@ -30,7 +30,9 @@ export const threadsRouter = router({
            messages(body, created_at, user_id, profiles(display_name))`
         )
         .eq("group_id", input.groupId)
-        .order("updated_at", { ascending: false });
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false, foreignTable: "messages" })
+        .limit(1, { foreignTable: "messages" });
 
       if (error) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });

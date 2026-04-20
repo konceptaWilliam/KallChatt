@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+import { grid } from "ldrs";
+grid.register();
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +27,10 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) {
       setError(error.message);
@@ -68,7 +74,8 @@ export default function LoginPage() {
           {forgotSuccess ? (
             <div className="space-y-4">
               <p className="text-sm text-ink border border-border bg-surface-2 px-3 py-2">
-                If that email exists, a reset link has been sent. Check your inbox.
+                If that email exists, a reset link has been sent. Check your
+                inbox.
               </p>
               <button
                 onClick={() => {
@@ -97,7 +104,7 @@ export default function LoginPage() {
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-border bg-surface-2 px-3 py-2.5 text-base text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
                 />
               </div>
 
@@ -156,7 +163,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-base text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
             />
           </div>
 
@@ -174,7 +181,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-border bg-surface-2 px-3 py-2.5 text-base text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
             />
           </div>
 
@@ -189,7 +196,11 @@ export default function LoginPage() {
             disabled={loading || !email || !password}
             className="w-full bg-ink text-surface font-mono text-sm font-medium py-2.5 px-4 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink/90 transition-colors"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? (
+              <l-grid size="25" speed="1.5" color="black"></l-grid>
+            ) : (
+              "Sign in"
+            )}
           </button>
 
           <button

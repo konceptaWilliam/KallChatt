@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
@@ -127,6 +127,7 @@ function AttachmentModal({
                 src={attachment.url}
                 alt={attachment.name}
                 className="max-w-full max-h-full object-contain"
+                loading="lazy"
               />
             ) : (
               <div className="flex flex-col items-center gap-4">
@@ -246,7 +247,6 @@ function Avatar({
         height={28}
         className="w-7 h-7 rounded-sm object-cover flex-shrink-0"
         style={pulsing ? { animation: "breath 1.6s ease-out" } : undefined}
-        unoptimized
         onError={() => setImgError(true)}
       />
     );
@@ -263,6 +263,187 @@ function Avatar({
       title={name}
     >
       {initials}
+    </div>
+  );
+}
+
+function ImageGallery({
+  attachments,
+  onOpen,
+}: {
+  attachments: Attachment[];
+  onOpen: (att: Attachment) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef<{ mx: number; my: number; ox: number; minX: number; maxX: number } | null>(null);
+  const hasDraggedRef = useRef(false);
+  const justExpandedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const n = attachments.length;
+
+  // Reset position when gallery collapses
+  useEffect(() => {
+    if (!expanded) setOffset({ x: 0, y: 0 });
+  }, [expanded]);
+
+  // Set grabbing cursor on <body> during drag so it stays consistent
+  // even when the pointer moves faster than the element can follow
+  useEffect(() => {
+    if (isDragging) {
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+    } else {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isDragging]);
+
+  // Global mousemove / mouseup while a drag is active
+  useEffect(() => {
+    if (!isDragging) return;
+
+    function onMove(e: MouseEvent) {
+      if (!dragStart.current) return;
+      const dx = e.clientX - dragStart.current.mx;
+      if (Math.abs(dx) > 3) hasDraggedRef.current = true;
+      const newX = Math.min(dragStart.current.maxX, Math.max(dragStart.current.minX, dragStart.current.ox + dx));
+      setOffset({ x: newX, y: 0 });
+    }
+
+    function onUp(e: MouseEvent) {
+      setIsDragging(false);
+      dragStart.current = null;
+      // Collapse if the pointer ended outside the container
+      if (containerRef.current) {
+        const r = containerRef.current.getBoundingClientRect();
+        const inside = e.clientX >= r.left && e.clientX <= r.right
+                    && e.clientY >= r.top  && e.clientY <= r.bottom;
+        if (!inside) setExpanded(false);
+      }
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isDragging]);
+
+  function startDrag(clientX: number, clientY: number) {
+    hasDraggedRef.current = false;
+
+    // Expanded width is deterministic: 130px per image + 10px gap between each.
+    // Use this instead of measuring the DOM so bounds are correct even before
+    // the fan animation has finished running.
+    let minX = 0, maxX = 0;
+    const parent = containerRef.current?.parentElement;
+    if (parent) {
+      const expandedWidth = 130 * n + 10 * (n - 1);
+      const parentWidth = parent.getBoundingClientRect().width;
+      minX = Math.min(0, parentWidth - expandedWidth);
+    }
+
+    dragStart.current = { mx: clientX, my: clientY, ox: offset.x, minX, maxX };
+    setIsDragging(true);
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex items-center"
+      style={{
+        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        cursor: expanded ? (isDragging ? "grabbing" : "grab") : "default",
+        // Prevent the browser from scrolling/panning the page while the gallery is being dragged
+        touchAction: expanded ? "none" : "auto",
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => { if (!isDragging) setExpanded(false); }}
+      onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
+      onTouchStart={(e) => {
+        if (!expanded) {
+          setExpanded(true);
+          justExpandedRef.current = true;
+        }
+        const t = e.touches[0];
+        startDrag(t.clientX, t.clientY);
+      }}
+      onTouchMove={(e) => {
+        if (!dragStart.current) return;
+        const t = e.touches[0];
+        const dx = t.clientX - dragStart.current.mx;
+        if (Math.abs(dx) > 3) hasDraggedRef.current = true;
+        const newX = Math.min(dragStart.current.maxX, Math.max(dragStart.current.minX, dragStart.current.ox + dx));
+        setOffset({ x: newX, y: 0 });
+      }}
+      onTouchEnd={() => { setIsDragging(false); dragStart.current = null; }}
+    >
+      {attachments.map((att, i) => {
+        const dir = i % 2 === 0 ? 1 : -1;
+        const stackedRot = dir * (1.5 + i * 1.5);
+        const expandedRot = dir * (0.5 + (i % 3) * 0.4);
+
+        return (
+          <button
+            key={i}
+            onClick={() => {
+              if (hasDraggedRef.current) return;
+              if (justExpandedRef.current) { justExpandedRef.current = false; return; }
+              if (expanded) onOpen(att);
+              else setExpanded(true);
+            }}
+            title={att.name}
+            className="block text-left flex-shrink-0 focus:outline-none"
+            style={{
+              background: "var(--background)",
+              padding: "6px 6px 22px 6px",
+              boxShadow: isDragging
+                ? "0 10px 28px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12)"
+                : "0 4px 14px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.08)",
+              rotate: `${expanded ? expandedRot : stackedRot}deg`,
+              width: "130px",
+              marginLeft: i === 0 ? 0 : (expanded ? "10px" : "-92px"),
+              zIndex: expanded ? "auto" : n - i,
+              // Disable spring transitions while dragging so movement is 1:1 with the pointer
+              transition: isDragging
+                ? "box-shadow 200ms ease"
+                : "rotate 320ms cubic-bezier(0.34,1.56,0.64,1), margin-left 280ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms ease",
+              position: "relative",
+            }}
+          >
+            <img
+              src={att.url}
+              alt={att.name}
+              draggable={false}
+              className="w-full object-cover block"
+              style={{ aspectRatio: "1/1" }}
+              loading="lazy"
+            />
+            <span
+              className="font-mono text-[9px] text-center truncate block mt-1.5"
+              style={{ color: "#888", opacity: expanded ? 1 : 0, transition: "opacity 200ms ease" }}
+            >
+              {att.name}
+            </span>
+          </button>
+        );
+      })}
+
+      {/* Count badge — fades out when gallery is spread */}
+      <div
+        className="absolute -bottom-0.5 right-0 bg-ink text-surface font-mono text-[9px] leading-none px-1.5 py-0.5 pointer-events-none select-none"
+        style={{ opacity: expanded ? 0 : 1, transition: "opacity 200ms ease" }}
+      >
+        {n}×
+      </div>
     </div>
   );
 }
@@ -389,13 +570,22 @@ export function ThreadDetail({
   // Maps messageId -> animationDelay (ms) for the initial batch stagger
   const initialDelays = useRef<Map<string, number>>(new Map());
   const [body, setBody] = useState("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [myInfo, setMyInfo] = useState<{ id: string; display_name: string } | null>(null);
+  const presenceChannelRef = useRef<ReturnType<typeof createClient>["channel"] | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>(initialStatus);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeLightbox, setActiveLightbox] = useState<Attachment | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef(0);
+  const isInitialLoad = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -407,6 +597,12 @@ export function ThreadDetail({
   useEffect(() => {
     markRead(threadId, groupId);
   }, [threadId, groupId, markRead]);
+
+  // Reset scroll tracking when thread changes so initial load scrolls to bottom
+  useEffect(() => {
+    isInitialLoad.current = true;
+    prevMsgCountRef.current = 0;
+  }, [threadId]);
 
   const deleteThread = trpc.threads.delete.useMutation({
     onSuccess: () => {
@@ -435,9 +631,8 @@ export function ThreadDetail({
         })
       );
     },
-    onSuccess: () => {
-      utils.messages.list.invalidate({ threadId });
-    },
+    // No onSuccess invalidation — the optimistic update in onMutate is authoritative.
+    // onError rolls back by refetching.
     onError: () => {
       utils.messages.list.invalidate({ threadId });
     },
@@ -450,25 +645,100 @@ export function ThreadDetail({
 
   useEffect(() => {
     if (loadedMessages) {
-      const msgs = loadedMessages as unknown as Message[];
+      const { messages: msgs, hasMore: more } = loadedMessages as unknown as {
+        messages: Message[];
+        hasMore: boolean;
+      };
       // Assign staggered delays for the initial batch, capped so long threads don't wait forever
       initialDelays.current = new Map(
         msgs.map((m, i) => [m.id, Math.min(i * 30, 600)])
       );
       setMessages(msgs);
+      setHasMore(more);
     }
   }, [loadedMessages]);
 
   useEffect(() => {
+    const count = messages.length;
+    if (count === 0) return;
+
     if (highlightMessageId) {
       const el = document.getElementById(`message-${highlightMessageId}`);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
+        prevMsgCountRef.current = count;
+        isInitialLoad.current = false;
         return;
       }
     }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+
+    if (isInitialLoad.current) {
+      // Instant scroll on first load — no janky smooth-scroll through 50 messages
+      bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+      isInitialLoad.current = false;
+      prevMsgCountRef.current = count;
+      return;
+    }
+
+    if (count > prevMsgCountRef.current) {
+      // Only auto-scroll for new messages, and only if user is already near the bottom
+      const container = scrollContainerRef.current;
+      if (container) {
+        const distFromBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distFromBottom < 200) {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    }
+
+    prevMsgCountRef.current = count;
   }, [messages, highlightMessageId]);
+
+  // Fetch current user info for typing presence
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single();
+      if (profile) setMyInfo({ id: user.id, display_name: profile.display_name });
+    });
+  }, []);
+
+  // Presence channel — typing indicators
+  useEffect(() => {
+    if (!myInfo) return;
+    const supabase = createClient();
+
+    const channel = supabase.channel(`typing:${threadId}`, {
+      config: { presence: { key: myInfo.id } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ display_name: string; typing: boolean }>();
+        const names = Object.entries(state)
+          .filter(([uid, presences]) => uid !== myInfo.id && (presences as { display_name: string; typing: boolean }[])[0]?.typing)
+          .map(([, presences]) => (presences as { display_name: string; typing: boolean }[])[0].display_name);
+        setTypingUsers(names);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ display_name: myInfo.display_name, typing: false });
+        }
+      });
+
+    presenceChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      presenceChannelRef.current = null;
+    };
+  }, [threadId, myInfo]);
 
   // Realtime: new messages
   useEffect(() => {
@@ -553,6 +823,33 @@ export function ThreadDetail({
     },
   });
 
+  async function loadEarlier() {
+    if (isLoadingMore || !hasMore || messages.length === 0) return;
+    setIsLoadingMore(true);
+    const container = scrollContainerRef.current;
+    const prevScrollHeight = container?.scrollHeight ?? 0;
+    try {
+      const cursor = messages[0].created_at;
+      const result = await utils.messages.list.fetch({ threadId, cursor });
+      const { messages: older, hasMore: more } = result as unknown as {
+        messages: Message[];
+        hasMore: boolean;
+      };
+      setHasMore(more);
+      setMessages((prev) => [...older, ...prev]);
+      // Restore scroll position so the viewport doesn't jump to the top
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+      });
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
   async function uploadFiles(files: File[]): Promise<Attachment[]> {
     const supabase = createClient();
     const {
@@ -582,10 +879,27 @@ export function ThreadDetail({
     );
   }
 
+  function stopTyping() {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (presenceChannelRef.current && myInfo) {
+      presenceChannelRef.current.track({ display_name: myInfo.display_name, typing: false });
+    }
+  }
+
+  function handleBodyChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setBody(e.target.value);
+    if (presenceChannelRef.current && myInfo) {
+      presenceChannelRef.current.track({ display_name: myInfo.display_name, typing: true });
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(stopTyping, 3000);
+    }
+  }
+
   async function handleSend() {
     if ((!body.trim() && pendingFiles.length === 0) || sendMessage.isPending || uploading)
       return;
 
+    stopTyping();
     setUploading(true);
     setUploadError(null);
 
@@ -637,82 +951,104 @@ export function ThreadDetail({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Group messages by date
-  const messagesByDate: Array<{ date: string; messages: Message[] }> = [];
-  for (const msg of messages) {
-    const dateLabel = formatDate(msg.created_at);
-    const last = messagesByDate[messagesByDate.length - 1];
-    if (last && last.date === dateLabel) {
-      last.messages.push(msg);
-    } else {
-      messagesByDate.push({ date: dateLabel, messages: [msg] });
+  // Group messages by date — memoized so it doesn't re-run on unrelated state changes
+  const messagesByDate = useMemo(() => {
+    const groups: Array<{ date: string; messages: Message[] }> = [];
+    for (const msg of messages) {
+      const dateLabel = formatDate(msg.created_at);
+      const last = groups[groups.length - 1];
+      if (last && last.date === dateLabel) {
+        last.messages.push(msg);
+      } else {
+        groups.push({ date: dateLabel, messages: [msg] });
+      }
     }
-  }
+    return groups;
+  }, [messages]);
 
   const isDone = threadStatus === "DONE";
   const canSend = !isDone && (body.trim() || pendingFiles.length > 0) && !sendMessage.isPending && !uploading;
 
+  const trashIcon = (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" /><path d="M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 bg-surface">
       {/* Thread header */}
-      <header className="px-6 py-[14px] border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
-        <div className="min-w-0">
-          <h1 className="font-mono text-sm font-semibold text-ink truncate">
-            <span className="text-muted-2"># </span>
-            {initialTitle}
-          </h1>
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
+      <header className="border-b border-border flex-shrink-0">
+        {/* Top row: back (mobile) + title + desktop controls */}
+        <div className="px-3 md:px-6 flex items-center gap-2 md:gap-4 h-12 md:h-auto md:py-[14px]">
+          {/* Back button — mobile only */}
+          <button
+            onClick={() => router.push(`/g/${groupId}`)}
+            className="md:hidden w-11 h-full flex items-center justify-center -ml-1 flex-shrink-0 text-muted hover:text-ink transition-colors"
+            aria-label="Back to threads"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+
+          {/* Title */}
+          <div className="flex-1 min-w-0">
+            <h1 className="font-mono text-sm font-semibold text-ink truncate">
+              <span className="text-muted-2"># </span>
+              {initialTitle}
+            </h1>
+          </div>
+
+          {/* Desktop: status + delete */}
+          <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+            <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
+            {confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-red-600 uppercase tracking-wider">Delete?</span>
+                <button onClick={() => deleteThread.mutate({ threadId })} disabled={deleteThread.isPending} className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 bg-red-600 text-white disabled:opacity-40">
+                  {deleteThread.isPending ? "..." : "Confirm"}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 text-muted hover:text-ink transition-colors">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} title="Delete thread" className="text-muted hover:text-red-600 transition-colors">
+                {trashIcon}
+              </button>
+            )}
+          </div>
+
+          {/* Mobile: delete icon or confirm */}
           {confirmDelete ? (
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-red-600 uppercase tracking-wider">
-                Delete?
-              </span>
-              <button
-                onClick={() => deleteThread.mutate({ threadId })}
-                disabled={deleteThread.isPending}
-                className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 bg-red-600 text-white disabled:opacity-40"
-              >
-                {deleteThread.isPending ? "..." : "Confirm"}
+            <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
+              <span className="font-mono text-[10px] text-red-600 uppercase">delete?</span>
+              <button onClick={() => deleteThread.mutate({ threadId })} disabled={deleteThread.isPending} className="font-mono text-[10px] uppercase px-2 py-1 bg-red-600 text-white disabled:opacity-40">
+                {deleteThread.isPending ? "..." : "yes"}
               </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 text-muted hover:text-ink transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={() => setConfirmDelete(false)} className="font-mono text-[10px] uppercase px-2 py-1 text-muted">no</button>
             </div>
           ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              title="Delete thread"
-              className="text-muted hover:text-red-600 transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6" />
-                <path d="M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
+            <button onClick={() => setConfirmDelete(true)} title="Delete thread" className="md:hidden w-11 h-full flex items-center justify-center flex-shrink-0 text-muted hover:text-red-600 transition-colors">
+              {trashIcon}
             </button>
           )}
         </div>
+
+        {/* Mobile status row — full-width below title, hidden during delete confirm */}
+        {!confirmDelete && (
+          <div className="md:hidden px-3 pb-2">
+            <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
+          </div>
+        )}
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-3 md:py-4">
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -732,7 +1068,20 @@ export function ThreadDetail({
             </p>
           </div>
         ) : (
-          messagesByDate.map(({ date, messages: dayMessages }) => (
+          <>
+            {hasMore && (
+              <div className="flex justify-center mb-4">
+                <button
+                  onClick={loadEarlier}
+                  disabled={isLoadingMore}
+                  className="font-mono text-[11px] text-muted hover:text-ink uppercase tracking-wider px-3 py-1.5 border border-border hover:border-ink/30 transition-colors disabled:opacity-40"
+                >
+                  {isLoadingMore ? "loading…" : "↑ load earlier messages"}
+                </button>
+              </div>
+            )}
+            {messagesByDate.map(({ date, messages: dayMessages }) => {
+              return (
             <div key={date}>
               {/* Date divider */}
               <div className="flex items-center gap-3 my-4">
@@ -822,65 +1171,63 @@ export function ThreadDetail({
                       </div>
 
                       {/* Attachments */}
-                      {(msg.attachments ?? []).length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {msg.attachments.map((att, i) =>
-                            att.type === "image" ? (
+                      {(msg.attachments ?? []).length > 0 && (() => {
+                        const imgAtts = msg.attachments.filter((a) => a.type === "image");
+                        const audioAtts = msg.attachments.filter((a) => a.type === "audio");
+                        return (
+                          <div className="mt-2 space-y-2">
+                            {/* Single image: classic polaroid */}
+                            {imgAtts.length === 1 && (
                               <button
-                                key={i}
-                                onClick={() => setActiveLightbox(att)}
+                                onClick={() => setActiveLightbox(imgAtts[0])}
                                 className="text-left transition-all duration-150 hover:scale-[1.03]"
                                 style={{
                                   background: "var(--background)",
                                   padding: "8px 8px 28px 8px",
                                   boxShadow: "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
-                                  rotate: `${(i % 2 === 0 ? 1 : -1) * (1 + (i % 3) * 0.5)}deg`,
+                                  rotate: `${(0 % 2 === 0 ? 1 : -1) * (1 + (0 % 3) * 0.5)}deg`,
                                   width: "160px",
+                                  display: "block",
                                 }}
                               >
                                 <img
-                                  src={att.url}
-                                  alt={att.name}
+                                  src={imgAtts[0].url}
+                                  alt={imgAtts[0].name}
                                   className="w-full object-cover"
                                   style={{ aspectRatio: "1/1", display: "block" }}
+                                  loading="lazy"
                                 />
-                                <span
-                                  className="font-mono text-[10px] text-center truncate block mt-2"
-                                  style={{ color: "#888" }}
-                                >
-                                  {att.name}
+                                <span className="font-mono text-[10px] text-center truncate block mt-2" style={{ color: "#888" }}>
+                                  {imgAtts[0].name}
                                 </span>
                               </button>
-                            ) : (
-                              <button
-                                key={i}
-                                onClick={() => setActiveLightbox(att)}
-                                className="flex items-center gap-2 border border-border px-3 py-2 hover:border-pastel-deep transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="text-muted flex-shrink-0"
-                                >
-                                  <path d="M9 18V5l12-2v13" />
-                                  <circle cx="6" cy="18" r="3" />
-                                  <circle cx="18" cy="16" r="3" />
-                                </svg>
-                                <span className="font-mono text-xs text-ink max-w-[160px] truncate">
-                                  {att.name}
-                                </span>
-                              </button>
-                            )
-                          )}
-                        </div>
-                      )}
+                            )}
+                            {/* Multiple images: gallery fan effect */}
+                            {imgAtts.length >= 2 && (
+                              <ImageGallery attachments={imgAtts} onOpen={setActiveLightbox} />
+                            )}
+                            {/* Audio attachments */}
+                            {audioAtts.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {audioAtts.map((att, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setActiveLightbox(att)}
+                                    className="flex items-center gap-2 border border-border px-3 py-2 hover:border-pastel-deep transition-colors"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
+                                      <path d="M9 18V5l12-2v13" />
+                                      <circle cx="6" cy="18" r="3" />
+                                      <circle cx="18" cy="16" r="3" />
+                                    </svg>
+                                    <span className="font-mono text-xs text-ink max-w-[160px] truncate">{att.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Reaction chips */}
                       {(msg.reactions ?? []).some((r) => r.count > 0) && (
@@ -914,7 +1261,9 @@ export function ThreadDetail({
                 );
               })}
             </div>
-          ))
+          );
+          })}
+          </>
         )}
         <div ref={bottomRef} />
       </div>
@@ -930,7 +1279,7 @@ export function ThreadDetail({
       )}
 
       {/* Composer */}
-      <div className="px-6 pt-[14px] pb-4 border-t border-border flex-shrink-0">
+      <div className="px-4 md:px-6 pt-3 md:pt-[14px] pb-4 border-t border-border flex-shrink-0 pb-safe">
         {isDone && (
           <div className="flex items-center justify-center gap-2 py-2.5 mb-0 border border-done-tint bg-done-tint/50">
             <span className="font-mono text-[11px] text-done-ink uppercase tracking-[0.12em]">
@@ -998,7 +1347,7 @@ export function ThreadDetail({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             title="Attach image or audio"
-            className="h-10 w-10 flex-shrink-0 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors"
+            className="h-11 w-11 md:h-10 md:w-10 flex-shrink-0 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1017,11 +1366,11 @@ export function ThreadDetail({
           <textarea
             ref={textareaRef}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={handleBodyChange}
             onKeyDown={handleKeyDown}
             placeholder={`Write to #${initialTitle}…`}
             rows={1}
-            className="flex-1 min-h-[40px] max-h-40 border-none bg-transparent px-2.5 py-[10px] font-sans text-[13.5px] leading-[1.45] text-ink placeholder:text-muted resize-none outline-none overflow-y-auto"
+            className="flex-1 min-h-[44px] md:min-h-[40px] max-h-40 border-none bg-transparent px-2.5 py-[10px] font-sans text-base md:text-[13.5px] leading-[1.45] text-ink placeholder:text-muted resize-none outline-none overflow-y-auto"
             onInput={(e) => {
               const t = e.currentTarget;
               t.style.height = "auto";
@@ -1031,7 +1380,7 @@ export function ThreadDetail({
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className={`h-10 px-4 flex-shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] border-none transition-all duration-200 ${
+            className={`h-11 md:h-10 px-4 flex-shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] border-none transition-all duration-200 ${
               canSend
                 ? "bg-ink text-surface cursor-pointer hover:-translate-y-px"
                 : "bg-border text-muted-2 cursor-not-allowed"
@@ -1040,6 +1389,15 @@ export function ThreadDetail({
             {uploading ? "↑" : sendMessage.isPending ? "…" : "send"}
           </button>
         </div>}
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <p className="font-mono text-[10px] text-muted mt-1.5 h-3">
+            {typingUsers.length === 1
+              ? `${typingUsers[0]} is typing…`
+              : `${typingUsers.slice(0, -1).join(", ")} and ${typingUsers.at(-1)} are typing…`}
+          </p>
+        )}
 
         {/* Composer hint */}
         {!isDone && <div className="flex items-center justify-between mt-1.5">

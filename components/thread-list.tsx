@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "./status-badge";
 import { NewThreadDialog } from "./new-thread-dialog";
 import { useUnread, getLastSeen, setLastSeen } from "@/lib/unread-context";
+import { useMobileSidebar } from "@/lib/mobile-sidebar-context";
 
 type Thread = {
   id: string;
@@ -64,6 +65,10 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
   const [showNewThread, setShowNewThread] = useState(false);
   const utils = trpc.useUtils();
   const { threadCounts, setThreadCount } = useUnread();
+  const { open: openSidebar } = useMobileSidebar();
+
+  // On mobile, hide thread list when a thread is open so the detail takes full width
+  const isOnThread = /\/t\//.test(pathname);
 
   const { data: rawThreads = [], isLoading } = trpc.threads.list.useQuery(
     { groupId },
@@ -71,7 +76,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
   );
 
   const threads = rawThreads as unknown as Thread[];
-  const sorted = sortThreads(threads);
+  const sorted = useMemo(() => sortThreads(threads), [threads]);
 
   // Calculate and push unread counts whenever thread data changes
   useEffect(() => {
@@ -108,27 +113,40 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
         { event: "*", schema: "public", table: "threads", filter: `group_id=eq.${groupId}` },
         () => { utils.threads.list.invalidate({ groupId }); }
       )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        () => { utils.threads.list.invalidate({ groupId }); }
-      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [groupId, utils]);
 
   return (
-    <section className="w-[336px] flex-shrink-0 border-r border-border flex flex-col h-full">
+    <section
+      className={`${
+        isOnThread ? "hidden md:flex" : "flex"
+      } flex-col w-full md:w-[336px] flex-shrink-0 border-r border-border h-full`}
+    >
       {/* Header */}
-      <header className="px-[18px] pt-[14px] pb-[10px] border-b border-border">
-        <div className="flex items-baseline justify-between">
-          <span className="font-mono text-sm font-semibold text-ink">
+      <header className="px-3 md:px-[18px] pt-2 md:pt-[14px] pb-2 md:pb-[10px] border-b border-border">
+        <div className="flex items-center gap-1">
+          {/* Hamburger - mobile only */}
+          <button
+            onClick={openSidebar}
+            className="md:hidden -ml-1 w-11 h-11 flex items-center justify-center text-muted hover:text-ink transition-colors flex-shrink-0"
+            aria-label="Open menu"
+          >
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor" aria-hidden="true">
+              <rect width="18" height="2" rx="1" />
+              <rect y="6" width="18" height="2" rx="1" />
+              <rect y="12" width="18" height="2" rx="1" />
+            </svg>
+          </button>
+
+          <span className="font-mono text-sm font-semibold text-ink flex-1 truncate min-w-0">
             <span className="text-muted-2">· </span>{groupName}
           </span>
+
           <button
             onClick={() => setShowNewThread(true)}
-            className="font-mono text-[11px] px-2.5 py-1 border border-pastel-deep text-pastel-ink transition-all duration-150 hover:-translate-y-px"
+            className="font-mono text-[11px] px-2.5 py-2 md:py-1 border border-pastel-deep text-pastel-ink transition-all duration-150 hover:-translate-y-px flex-shrink-0 min-h-[44px] md:min-h-0 flex items-center"
             style={{ background: "var(--pastel)" }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 0 var(--pastel-deep)";

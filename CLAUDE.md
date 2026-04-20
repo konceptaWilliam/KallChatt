@@ -12,20 +12,20 @@ A web-based team messenger. Radical simplicity — threads in groups, each with 
 
 ## Key files
 
-| File | Purpose |
-|------|---------|
-| `lib/trpc/router.ts` | Merged AppRouter — groups, threads, messages, invites, workspace, members, onboarding, profile |
-| `lib/trpc/trpc.ts` | tRPC init — `publicProcedure`, `protectedProcedure`, `adminProcedure` |
-| `lib/trpc/context.ts` | tRPC context: Supabase session → user + profile |
-| `lib/supabase/client.ts` | Browser Supabase client (`createBrowserClient`) |
-| `lib/supabase/server.ts` | Server Supabase client (`createServerClient` + cookies) |
-| `lib/supabase/admin.ts` | Service-role client — bypasses RLS, used in all tRPC mutations |
-| `middleware.ts` | Session refresh + auth guard. Public paths: `/login`, `/auth/callback`, `/invite`, `/api/trpc` |
-| `supabase/migrations/001_initial_schema.sql` | Full schema + RLS policies + helper functions |
-| `app/auth/callback/route.ts` | Handles magic link callback, invite token acceptance, new vs existing user routing |
-| `app/page.tsx` | Root redirect — checks profile (admin client), routes to first group or onboarding |
-| `components/thread-detail.tsx` | Real-time messages via Supabase Realtime |
-| `components/thread-list.tsx` | Real-time thread status updates |
+| File                                         | Purpose                                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `lib/trpc/router.ts`                         | Merged AppRouter — groups, threads, messages, invites, workspace, members, onboarding, profile |
+| `lib/trpc/trpc.ts`                           | tRPC init — `publicProcedure`, `protectedProcedure`, `adminProcedure`                          |
+| `lib/trpc/context.ts`                        | tRPC context: Supabase session → user + profile                                                |
+| `lib/supabase/client.ts`                     | Browser Supabase client (`createBrowserClient`)                                                |
+| `lib/supabase/server.ts`                     | Server Supabase client (`createServerClient` + cookies)                                        |
+| `lib/supabase/admin.ts`                      | Service-role client — bypasses RLS, used in all tRPC mutations                                 |
+| `middleware.ts`                              | Session refresh + auth guard. Public paths: `/login`, `/auth/callback`, `/invite`, `/api/trpc` |
+| `supabase/migrations/001_initial_schema.sql` | Full schema + RLS policies + helper functions                                                  |
+| `app/auth/callback/route.ts`                 | Handles magic link callback, invite token acceptance, new vs existing user routing             |
+| `app/page.tsx`                               | Root redirect — checks profile (admin client), routes to first group or onboarding             |
+| `components/thread-detail.tsx`               | Real-time messages via Supabase Realtime                                                       |
+| `components/thread-list.tsx`                 | Real-time thread status updates                                                                |
 
 ## Environment variables
 
@@ -43,6 +43,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 2. Enable Realtime on `messages` and `threads` tables (Dashboard → Database → Replication)
 3. Create a **public** Storage bucket named `avatars`
 4. Run these storage policies in the SQL editor:
+
    ```sql
    CREATE POLICY "avatar upload" ON storage.objects
      FOR INSERT TO authenticated
@@ -71,12 +72,22 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - Resend `from` address must be a verified domain in production. For dev/testing use `onboarding@resend.dev`.
 - Supabase free tier: 3 OTP emails/hour per project.
 
-## Known pending items
+## Agent skills
 
-- Avatar upload storage policies need to be applied in Supabase (see setup above) — currently getting RLS error on upload
-- Debug log in `app/page.tsx` (console.log on line ~21) should be removed once stable
+Specialized agents live in `.agents/skills/`. Invoke by name:
+
+| Agent              | File                                                      | Purpose                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Caveman            | `.agents/skills/caveman/SKILL.md`                         | Ultra-compressed communication mode (~75% token reduction). Triggers on "caveman mode", `/caveman`, "less tokens". Levels: lite / full / ultra / wenyan variants. |
+| Caveman Compress   | `.agents/skills/caveman-compress/SKILL.md`                | File/data compression scripts with validation and benchmarking.                                                                                                   |
+| Caveman Help       | `.agents/skills/caveman-help/SKILL.md`                    | Help docs in caveman style.                                                                                                                                       |
+| Responsivity Agent | `.agents/skills/responsivity-agent/agent-responsivity.md` | Tests layout across all viewports (320px–1920px), mobile drawer, touch targets, keyboard nav. Outputs structured pass/warn/fail report.                           |
+| Speed Agent        | `.agents/skills/speed-agent/agent-speed.md`               | Performance audit — Core Web Vitals, bundle size, query efficiency, Realtime latency, render cost.                                                                |
+| Security Agent     | `.agents/skills/security-agent/agent-security.md`         | Security audit — RLS, tRPC auth, invite tokens, session security, env var exposure, input validation.                                                             |
 
 @.agents/skills/caveman/SKILL.md
 @.agents/skills/caveman-compress/SKILL.md
 @.agents/skills/caveman-help/SKILL.md
-
+@.agents/skills/responsivity-agent/agent-responsivity.md
+@.agents/skills/security-agent/agent-security.md
+@.agents/skills/speed-agent/agent-speed.md
