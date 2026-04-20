@@ -21,6 +21,7 @@ type Reaction = {
   type: string;
   count: number;
   userReacted: boolean;
+  users: string[];
 };
 
 type ReplyTo = {
@@ -30,10 +31,26 @@ type ReplyTo = {
 };
 
 const REACTION_DEFAULTS: Reaction[] = [
-  { type: "👍", count: 0, userReacted: false },
-  { type: "👎", count: 0, userReacted: false },
-  { type: "❓", count: 0, userReacted: false },
+  { type: "👍", count: 0, userReacted: false, users: [] },
+  { type: "👎", count: 0, userReacted: false, users: [] },
+  { type: "❓", count: 0, userReacted: false, users: [] },
 ];
+
+type PollVoter = { id: string; display_name: string; avatar_url: string | null };
+
+type PollOption = {
+  id: string;
+  text: string;
+  vote_count: number;
+  user_voted: boolean;
+  voters: PollVoter[];
+};
+
+type PollData = {
+  id: string;
+  question: string;
+  options: PollOption[];
+};
 
 type Message = {
   id: string;
@@ -43,12 +60,272 @@ type Message = {
   is_deleted: boolean;
   user_id: string | null;
   thread_id: string;
+  poll_id: string | null;
+  poll: PollData | null;
   attachments: Attachment[];
   reactions: Reaction[];
   reply_to_id: string | null;
   reply_to: ReplyTo | null;
   profiles: { id: string; display_name: string; avatar_url: string | null } | null;
 };
+
+function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; threadId: string; myInfo: { id: string; display_name: string; avatar_url: string | null } | null }) {
+  const utils = trpc.useUtils();
+  const [poll, setPoll] = useState(initialPoll);
+  const [newOptionText, setNewOptionText] = useState("");
+  const [showAddOption, setShowAddOption] = useState(false);
+
+  // Sync local state when server data updates (after invalidation)
+  useEffect(() => { setPoll(initialPoll); }, [initialPoll]);
+
+  const vote = trpc.polls.vote.useMutation({
+    onMutate: ({ pollOptionId }) => {
+      const prev = poll;
+      setPoll((p) => ({
+        ...p,
+        options: p.options.map((o) =>
+          o.id !== pollOptionId ? o : {
+            ...o,
+            user_voted: !o.user_voted,
+            vote_count: o.user_voted ? o.vote_count - 1 : o.vote_count + 1,
+            voters: o.user_voted
+              ? o.voters.filter((v) => v.id !== myInfo?.id)
+              : myInfo
+              ? [...o.voters, { id: myInfo.id, display_name: myInfo.display_name, avatar_url: myInfo.avatar_url }]
+              : o.voters,
+          }
+        ),
+      }));
+      return { prev };
+    },
+    onError: (_, __, ctx) => { if (ctx?.prev) setPoll(ctx.prev); },
+    onSuccess: () => utils.messages.list.invalidate({ threadId }),
+  });
+
+  const addOption = trpc.polls.addOption.useMutation({
+    onSuccess: () => {
+      setNewOptionText("");
+      setShowAddOption(false);
+      utils.messages.list.invalidate({ threadId });
+    },
+  });
+
+  const totalVotes = poll.options.reduce((s, o) => s + o.vote_count, 0);
+
+  return (
+    <div className="mt-1 border border-border bg-surface-2 p-3 max-w-sm">
+      <p className="font-mono text-[12px] font-semibold text-ink mb-2">{poll.question}</p>
+      <div className="space-y-1.5">
+        {poll.options.map((opt) => {
+          const pct = totalVotes > 0 ? Math.round((opt.vote_count / totalVotes) * 100) : 0;
+          return (
+            <button
+              key={opt.id}
+              onClick={() => vote.mutate({ pollOptionId: opt.id })}
+              className={`w-full text-left relative overflow-hidden border transition-colors ${
+                opt.user_voted
+                  ? "border-pastel-deep bg-pastel-tint"
+                  : "border-border hover:border-pastel-deep"
+              }`}
+            >
+              {totalVotes > 0 && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-pastel/40 pointer-events-none"
+                  style={{ width: `${pct}%` }}
+                />
+              )}
+              <div className="relative flex items-center justify-between px-2.5 py-1.5 gap-2">
+                <span className="font-mono text-[12px] text-ink">{opt.text}</span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {opt.voters.length > 0 && (
+                    <div className="flex items-center -space-x-1">
+                      {opt.voters.slice(0, 5).map((v) => (
+                        <div
+                          key={v.id}
+                          title={v.display_name}
+                          className="w-4 h-4 border border-surface overflow-hidden flex items-center justify-center font-mono text-[7px] font-semibold flex-shrink-0"
+                          style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
+                        >
+                          {v.avatar_url ? (
+                            <img src={v.avatar_url} alt={v.display_name} className="w-full h-full object-cover" />
+                          ) : (
+                            v.display_name.slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                      ))}
+                      {opt.voters.length > 5 && (
+                        <div
+                          className="w-4 h-4 border border-surface flex items-center justify-center font-mono text-[7px] flex-shrink-0"
+                          style={{ background: "hsl(180 20% 80%)", color: "hsl(180 40% 28%)" }}
+                        >
+                          +{opt.voters.length - 5}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <span className="font-mono text-[10px] text-muted">
+                    {opt.vote_count} {opt.vote_count === 1 ? "vote" : "votes"}
+                  </span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {showAddOption ? (
+        <form
+          className="flex gap-1.5 mt-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newOptionText.trim()) return;
+            addOption.mutate({ pollId: poll.id, text: newOptionText.trim() });
+          }}
+        >
+          <input
+            autoFocus
+            value={newOptionText}
+            onChange={(e) => setNewOptionText(e.target.value)}
+            maxLength={200}
+            placeholder="Option text…"
+            className="flex-1 border border-border bg-surface px-2 py-1 font-mono text-[12px] text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+          />
+          <button
+            type="submit"
+            disabled={!newOptionText.trim() || addOption.isPending}
+            className="font-mono text-[10px] bg-ink text-surface px-2 py-1 disabled:opacity-40"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowAddOption(false); setNewOptionText(""); }}
+            className="font-mono text-[10px] text-muted hover:text-ink px-1"
+          >
+            ×
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShowAddOption(true)}
+          className="mt-2 font-mono text-[10px] text-muted hover:text-ink transition-colors"
+        >
+          + add option
+        </button>
+      )}
+      {totalVotes > 0 && (
+        <p className="font-mono text-[10px] text-muted-2 mt-1.5">{totalVotes} total vote{totalVotes !== 1 ? "s" : ""}</p>
+      )}
+    </div>
+  );
+}
+
+function PollCreateModal({
+  onSubmit,
+  onClose,
+  isPending,
+}: {
+  onSubmit: (question: string, options: string[]) => void;
+  onClose: () => void;
+  isPending: boolean;
+}) {
+  const [question, setQuestion] = useState("");
+  const [options, setOptions] = useState<string[]>([""]);
+
+  function setOption(i: number, val: string) {
+    setOptions((prev) => prev.map((o, idx) => (idx === i ? val : o)));
+  }
+
+  function addOption() {
+    setOptions((prev) => [...prev, ""]);
+  }
+
+  function removeOption(i: number) {
+    setOptions((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!question.trim()) return;
+    const validOptions = options.map((o) => o.trim()).filter(Boolean);
+    onSubmit(question.trim(), validOptions);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/20"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-surface border border-border w-full max-w-md mx-0 sm:mx-4 p-5 sm:p-6">
+        <h2 className="font-mono text-sm font-semibold text-ink mb-4">Create poll</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-1.5">
+              Question
+            </label>
+            <input
+              autoFocus
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              maxLength={500}
+              placeholder="What do you want to ask?"
+              className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-1.5">
+              Options <span className="normal-case text-muted-2">(optional — anyone can add more later)</span>
+            </label>
+            <div className="space-y-1.5">
+              {options.map((opt, i) => (
+                <div key={i} className="flex gap-1.5">
+                  <input
+                    value={opt}
+                    onChange={(e) => setOption(i, e.target.value)}
+                    maxLength={200}
+                    placeholder={`Option ${i + 1}`}
+                    className="flex-1 border border-border bg-surface-2 px-3 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+                  />
+                  {options.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      className="font-mono text-base text-muted hover:text-ink px-1"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addOption}
+              className="mt-1.5 font-mono text-[11px] text-muted hover:text-ink transition-colors"
+            >
+              + add option
+            </button>
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="font-mono text-sm text-muted hover:text-ink px-4 py-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!question.trim() || isPending}
+              className="bg-ink text-surface font-mono text-sm px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink/90 transition-colors"
+            >
+              {isPending ? "Sending…" : "Send poll"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString("en", {
@@ -612,7 +889,7 @@ export function ThreadDetail({
   const initialDelays = useRef<Map<string, number>>(new Map());
   const [body, setBody] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [myInfo, setMyInfo] = useState<{ id: string; display_name: string } | null>(null);
+  const [myInfo, setMyInfo] = useState<{ id: string; display_name: string; avatar_url: string | null } | null>(null);
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>(initialStatus);
@@ -621,6 +898,10 @@ export function ThreadDetail({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeLightbox, setActiveLightbox] = useState<Attachment | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [showPollCreate, setShowPollCreate] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -654,6 +935,27 @@ export function ThreadDetail({
     prevMsgCountRef.current = 0;
   }, [threadId]);
 
+  const createPoll = trpc.polls.create.useMutation({
+    onSuccess: (msg) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          ...(msg as unknown as Message),
+          poll_id: (msg as unknown as { poll_id: string | null }).poll_id ?? null,
+          poll: null,
+          reactions: [
+            { type: "👍", count: 0, userReacted: false, users: [] },
+            { type: "👎", count: 0, userReacted: false, users: [] },
+            { type: "❓", count: 0, userReacted: false, users: [] },
+          ],
+          reply_to: null,
+        },
+      ]);
+      setShowPollCreate(false);
+      utils.messages.list.invalidate({ threadId });
+    },
+  });
+
   const deleteThread = trpc.threads.delete.useMutation({
     onSuccess: () => {
       utils.threads.list.invalidate({ groupId });
@@ -663,20 +965,26 @@ export function ThreadDetail({
 
   const toggleReaction = trpc.messages.toggleReaction.useMutation({
     onMutate: ({ messageId, type }) => {
+      const myName = myInfo?.display_name ?? null;
       setMessages((prev) =>
         prev.map((m) => {
           if (m.id !== messageId) return m;
           return {
             ...m,
-            reactions: m.reactions.map((r) =>
-              r.type !== type
-                ? r
-                : {
-                    ...r,
-                    count: r.userReacted ? r.count - 1 : r.count + 1,
-                    userReacted: !r.userReacted,
-                  }
-            ),
+            reactions: m.reactions.map((r) => {
+              if (r.type !== type) return r;
+              const adding = !r.userReacted;
+              return {
+                ...r,
+                count: adding ? r.count + 1 : r.count - 1,
+                userReacted: adding,
+                users: myName
+                  ? adding
+                    ? [...r.users, myName]
+                    : r.users.filter((n) => n !== myName)
+                  : r.users,
+              };
+            }),
           };
         })
       );
@@ -781,10 +1089,10 @@ export function ThreadDetail({
       if (!user) return;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, avatar_url")
         .eq("id", user.id)
         .single();
-      if (profile) setMyInfo({ id: user.id, display_name: profile.display_name });
+      if (profile) setMyInfo({ id: user.id, display_name: profile.display_name, avatar_url: profile.avatar_url ?? null });
     });
   }, []);
 
@@ -843,6 +1151,7 @@ export function ThreadDetail({
             thread_id: string;
             attachments: Attachment[];
             reply_to_id: string | null;
+            poll_id: string | null;
           };
 
           const { data: profile } = await supabase
@@ -855,7 +1164,7 @@ export function ThreadDetail({
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [
               ...prev,
-              { ...newMsg, is_deleted: newMsg.is_deleted ?? false, profiles: profile ?? null, reactions: REACTION_DEFAULTS, reply_to: null },
+              { ...newMsg, is_deleted: newMsg.is_deleted ?? false, poll_id: newMsg.poll_id ?? null, poll: null, profiles: profile ?? null, reactions: REACTION_DEFAULTS, reply_to: null },
             ];
           });
         }
@@ -1369,6 +1678,9 @@ export function ThreadDetail({
                           </div>
                         ) : (
                           <>
+                            {msg.poll && (
+                              <PollView poll={msg.poll} threadId={threadId} myInfo={myInfo} />
+                            )}
                             {msg.body && (
                               <p className="text-[13.5px] leading-[1.55] text-ink whitespace-pre-wrap break-words">
                                 {renderBody(msg.body, members, myInfo?.id ?? "")}
@@ -1502,26 +1814,44 @@ export function ThreadDetail({
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {msg.reactions
                             .filter((r) => r.count > 0)
-                            .map((r) => (
-                              <button
-                                key={r.type}
-                                onClick={() =>
-                                  toggleReaction.mutate({
-                                    messageId: msg.id,
-                                    type: r.type as "👍" | "👎" | "❓",
-                                  })
-                                }
-                                className={`inline-flex items-center gap-1 font-mono text-[11px] px-[7px] py-0.5 border transition-all duration-150 ${
-                                  r.userReacted
-                                    ? "bg-pastel-tint text-pastel-ink border-pastel-deep"
-                                    : "text-muted border-border hover:border-pastel-deep"
-                                }`}
-                                style={r.userReacted ? { animation: "pop 240ms ease-out" } : undefined}
-                              >
-                                <span className="text-[12px]">{r.type}</span>
-                                <span>{r.count}</span>
-                              </button>
-                            ))}
+                            .map((r) => {
+                              const tooltipKey = `${msg.id}:${r.type}`;
+                              const isTooltipVisible = activeTooltip === tooltipKey;
+                              return (
+                                <div key={r.type} className="relative">
+                                  <button
+                                    onClick={() =>
+                                      toggleReaction.mutate({
+                                        messageId: msg.id,
+                                        type: r.type as "👍" | "👎" | "❓",
+                                      })
+                                    }
+                                    onMouseEnter={() => setActiveTooltip(tooltipKey)}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      setActiveTooltip(tooltipKey);
+                                      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+                                      tooltipTimerRef.current = setTimeout(() => setActiveTooltip(null), 2500);
+                                    }}
+                                    className={`inline-flex items-center gap-1 font-mono text-[11px] px-[7px] py-0.5 border transition-all duration-150 ${
+                                      r.userReacted
+                                        ? "bg-pastel-tint text-pastel-ink border-pastel-deep"
+                                        : "text-muted border-border hover:border-pastel-deep"
+                                    }`}
+                                    style={r.userReacted ? { animation: "pop 240ms ease-out" } : undefined}
+                                  >
+                                    <span className="text-[12px]">{r.type}</span>
+                                    <span>{r.count}</span>
+                                  </button>
+                                  {isTooltipVisible && r.users.length > 0 && (
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-30 bg-ink text-surface font-mono text-[10px] px-2 py-1 pointer-events-none whitespace-nowrap max-w-[200px] overflow-hidden text-ellipsis">
+                                      {r.users.join(", ")}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                         </div>
                       )}
                     </div>
@@ -1535,6 +1865,15 @@ export function ThreadDetail({
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* Poll create modal */}
+      {showPollCreate && (
+        <PollCreateModal
+          onSubmit={(question, options) => createPoll.mutate({ threadId, question, options })}
+          onClose={() => setShowPollCreate(false)}
+          isPending={createPoll.isPending}
+        />
+      )}
 
       {/* Attachment lightbox */}
       {activeLightbox && (
@@ -1650,26 +1989,50 @@ export function ThreadDetail({
             className="hidden"
             onChange={handleFileChange}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach image or audio"
-            className="h-11 w-11 md:h-10 md:w-10 flex-shrink-0 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            id="image-only-input"
+            onChange={handleFileChange}
+          />
+          {/* "+" attach menu */}
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setAttachMenuOpen((o) => !o)}
+              title="Attach or create poll"
+              className="h-11 w-11 md:h-10 md:w-10 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors font-mono text-lg leading-none"
             >
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-            </svg>
-          </button>
+              +
+            </button>
+            {attachMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setAttachMenuOpen(false)} />
+                <div className="absolute bottom-full left-0 mb-1 z-20 bg-surface border border-border shadow-lg min-w-[160px]">
+                  <button
+                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2 border-b border-border"
+                    onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
+                  >
+                    Attach a file
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2 border-b border-border"
+                    onClick={() => { setAttachMenuOpen(false); document.getElementById("image-only-input")?.click(); }}
+                  >
+                    Send image
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2"
+                    onClick={() => { setAttachMenuOpen(false); setShowPollCreate(true); }}
+                  >
+                    Create a poll
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <textarea
             ref={textareaRef}
             value={body}

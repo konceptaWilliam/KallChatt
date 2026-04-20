@@ -8,6 +8,7 @@ import { membersRouter } from "./routers/members";
 import { onboardingRouter } from "./routers/onboarding";
 import { profileRouter } from "./routers/profile";
 import { searchRouter } from "./routers/search";
+import { pollsRouter } from "./routers/polls";
 
 export const appRouter = router({
   groups: groupsRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   profile: profileRouter,
   search: searchRouter,
+  polls: pollsRouter,
 });
 
 export type AppRouter = typeof appRouter;

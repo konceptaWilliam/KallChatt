@@ -914,6 +914,32 @@ function GroupsSection() {
   );
 }
 
+function LogOutSection() {
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.replace("/login");
+  }
+
+  return (
+    <div>
+      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">Account</h2>
+      <div className="border border-border px-4 py-3">
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="font-mono text-sm text-red-600 hover:text-red-700 transition-colors disabled:opacity-40"
+        >
+          {signingOut ? "Signing out…" : "Log out"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: profile } = trpc.profile.get.useQuery();
   const isAdmin = profile?.role === "ADMIN";
@@ -942,6 +968,7 @@ export default function SettingsPage() {
             {isAdmin && <GroupsSection />}
             {isAdmin && <MembersSection />}
             {isAdmin && <InvitesSection />}
+            <LogOutSection />
           </div>
         </div>
       </div>

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 import { SearchDialog } from "./search-dialog";
 import { useUnread } from "@/lib/unread-context";
 import { useMobileSidebar } from "@/lib/mobile-sidebar-context";
@@ -13,14 +12,15 @@ type Group = { id: string; name: string };
 export function Sidebar({
   groups,
   userDisplayName,
+  avatarUrl,
 }: {
   groups: Group[];
   userDisplayName: string;
+  avatarUrl: string | null;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [signingOut, setSigningOut] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const { groupCounts, groupUrgentCounts } = useUnread();
   const { isOpen, close } = useMobileSidebar();
 
@@ -34,13 +34,6 @@ export function Sidebar({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
 
   const initials = userDisplayName
     .split(" ")
@@ -150,36 +143,28 @@ export function Sidebar({
           >
             settings
           </Link>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                className="w-6 h-6 flex-shrink-0 flex items-center justify-center border border-border font-mono text-[10px] font-semibold"
-                style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
-              >
-                {initials}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-ink truncate leading-tight">
-                  {userDisplayName}
-                </p>
-                <p className="font-mono text-[10px] text-muted leading-tight">online</p>
-              </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 flex-shrink-0 border border-border overflow-hidden flex items-center justify-center font-mono text-[10px] font-semibold"
+              style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
+            >
+              {avatarUrl && !avatarError ? (
+                <img
+                  src={avatarUrl}
+                  alt={userDisplayName}
+                  className="w-full h-full object-cover"
+                  onError={() => setAvatarError(true)}
+                />
+              ) : initials}
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{
-                  background: "var(--pastel-deep)",
-                  animation: "pulseDot 2s ease-in-out infinite",
-                }}
-              />
-              <button
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="font-mono text-[10px] text-muted hover:text-ink transition-colors"
-              >
-                {signingOut ? "..." : "out"}
-              </button>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-ink truncate leading-tight">{userDisplayName}</p>
+              <p className="font-mono text-[10px] text-muted leading-tight flex items-center gap-1">
+                online
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: "var(--pastel-deep)", animation: "pulseDot 2s ease-in-out infinite" }}
+                />
+              </p>
             </div>
           </div>
         </div>

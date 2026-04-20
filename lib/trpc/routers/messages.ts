@@ -62,7 +62,7 @@ export const messagesRouter = router({
       const admin = createAdminClient();
       let query = admin
         .from("messages")
-        .select("id, body, created_at, edited_at, is_deleted, thread_id, user_id, attachments, reply_to_id, profiles(id, display_name, avatar_url)")
+        .select("id, body, created_at, edited_at, is_deleted, thread_id, user_id, attachments, reply_to_id, poll_id, profiles(id, display_name, avatar_url)")
         .eq("thread_id", input.threadId)
         .order("created_at", { ascending: false })
         .limit(input.limit);
@@ -81,7 +81,7 @@ export const messagesRouter = router({
         messageIds.length > 0
           ? ((await admin
               .from("message_reactions")
-              .select("message_id, user_id, type")
+              .select("message_id, user_id, type, profiles(display_name)")
               .in("message_id", messageIds)).data ?? [])
           : [];
 
@@ -108,12 +108,53 @@ export const messagesRouter = router({
         ])
       );
 
+      // Fetch poll data for any poll messages
+      const pollIds = Array.from(new Set(rows.filter((m) => m.poll_id).map((m) => m.poll_id!)));
+      type VoterInfo = { id: string; display_name: string; avatar_url: string | null };
+      const pollDataMap = new Map<string, { id: string; question: string; options: { id: string; text: string; vote_count: number; user_voted: boolean; voters: VoterInfo[] }[] }>();
+
+      if (pollIds.length > 0) {
+        const [{ data: pollRows }, { data: optionRows }] = await Promise.all([
+          admin.from("polls").select("id, question").in("id", pollIds),
+          admin.from("poll_options").select("id, poll_id, text").in("poll_id", pollIds).order("created_at"),
+        ]);
+        const optionIds = (optionRows ?? []).map((o) => o.id);
+        const { data: voteRows } = optionIds.length > 0
+          ? await admin.from("poll_votes").select("poll_option_id, user_id, profiles(id, display_name, avatar_url)").in("poll_option_id", optionIds)
+          : { data: [] as { poll_option_id: string; user_id: string; profiles: unknown }[] };
+
+        for (const poll of (pollRows ?? [])) {
+          const options = (optionRows ?? [])
+            .filter((o) => o.poll_id === poll.id)
+            .map((o) => {
+              const votes = (voteRows ?? []).filter((v) => v.poll_option_id === o.id);
+              return {
+                id: o.id,
+                text: o.text,
+                vote_count: votes.length,
+                user_voted: votes.some((v) => v.user_id === profile.id),
+                voters: votes.map((v) => {
+                  const p = v.profiles as { id: string; display_name: string; avatar_url: string | null } | null;
+                  return { id: v.user_id, display_name: p?.display_name ?? "Unknown", avatar_url: p?.avatar_url ?? null };
+                }),
+              };
+            });
+          pollDataMap.set(poll.id, { id: poll.id, question: poll.question, options });
+        }
+      }
+
       const messages = [...rows].reverse().map((m) => ({
         ...m,
         reply_to: m.reply_to_id ? (replyToMap.get(m.reply_to_id) ?? null) : null,
+        poll: (m.poll_id ? (pollDataMap.get(m.poll_id) ?? null) : null),
         reactions: REACTION_TYPES.map((type) => {
           const users = reactionRows.filter((r) => r.message_id === m.id && r.type === type);
-          return { type, count: users.length, userReacted: users.some((r) => r.user_id === profile.id) };
+          return {
+            type,
+            count: users.length,
+            userReacted: users.some((r) => r.user_id === profile.id),
+            users: users.map((r) => (r.profiles as unknown as { display_name: string } | null)?.display_name ?? "Unknown"),
+          };
         }),
       }));
 
@@ -178,7 +219,7 @@ export const messagesRouter = router({
             attachments: input.attachments,
             reply_to_id: input.replyToId ?? null,
           })
-          .select("id, body, created_at, edited_at, is_deleted, thread_id, user_id, attachments, reply_to_id, profiles(id, display_name, avatar_url)")
+          .select("id, body, created_at, edited_at, is_deleted, thread_id, user_id, attachments, reply_to_id, poll_id, profiles(id, display_name, avatar_url)")
           .single(),
         admin
           .from("threads")
@@ -208,7 +249,8 @@ export const messagesRouter = router({
       return {
         ...data,
         reply_to,
-        reactions: REACTION_TYPES.map((type) => ({ type, count: 0, userReacted: false })),
+        poll: null,
+        reactions: REACTION_TYPES.map((type) => ({ type, count: 0, userReacted: false, users: [] })),
       };
     }),
 
