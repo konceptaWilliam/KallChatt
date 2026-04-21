@@ -1,38 +1,11 @@
 {
-  "name": "kallchatt-app",
-  "version": "0.1.0",
+  "name": "coldsoup",
   "private": true,
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.3",
-    "@tanstack/react-query": "^5.99.0",
-    "@trpc/client": "^11.16.0",
-    "@trpc/next": "^11.16.0",
-    "@trpc/react-query": "^11.16.0",
-    "@trpc/server": "^11.16.0",
-    "ldrs": "^1.1.9",
-    "next": "^14.2.35",
-    "react": "^18",
-    "react-dom": "^18",
-    "resend": "^6.12.0",
-    "server-only": "^0.0.1",
-    "superjson": "^2.2.6",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "start": "npm run start --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web"
   }
 }
