@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  useWindowDimensions,
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useNavigation } from "expo-router";
@@ -19,11 +18,17 @@ import { PollCard } from "@/components/PollCard";
 import type { ThreadStatus } from "@coldsoup/core";
 
 export default function ThreadScreen() {
-  const { threadId } = useLocalSearchParams<{ threadId: string }>();
+  const { threadId, title } = useLocalSearchParams<{ threadId: string; title: string }>();
   const navigation = useNavigation();
   const flatListRef = useRef<FlatList>(null);
   const [body, setBody] = useState("");
   const utils = trpc.useUtils();
+
+  useEffect(() => {
+    if (title) {
+      navigation.setOptions({ title: title.toLowerCase() });
+    }
+  }, [title, navigation]);
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     trpc.messages.list.useInfiniteQuery(
@@ -34,11 +39,6 @@ export default function ThreadScreen() {
         initialCursor: undefined,
       }
     );
-
-  const { data: threadData, refetch: refetchThread } = trpc.threads.list.useQuery(
-    { groupId: "" },
-    { enabled: false }
-  );
 
   const sendMessage = trpc.messages.send.useMutation({
     onMutate: async ({ body: msgBody }) => {
@@ -110,7 +110,7 @@ export default function ThreadScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-surface items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: "#F2EFE8", alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#1A1A18" />
       </View>
     );
@@ -118,7 +118,7 @@ export default function ThreadScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-surface"
+      style={{ flex: 1, backgroundColor: "#F2EFE8" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
@@ -150,24 +150,29 @@ export default function ThreadScreen() {
         }}
       />
 
-      <View className="px-3 py-3 border-t border-border flex-row items-end gap-2">
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#E2DDD2", flexDirection: "row", alignItems: "flex-end", gap: 8, backgroundColor: "#F2EFE8" }}>
         <TextInput
-          className="flex-1 border border-border rounded-xl px-4 py-3 text-ink text-base bg-white"
+          style={{ flex: 1, borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: "#1A1A18", maxHeight: 120 }}
           placeholder="Message..."
-          placeholderTextColor="#888780"
+          placeholderTextColor="#6B6A65"
           value={body}
           onChangeText={setBody}
           multiline
-          style={{ maxHeight: 120 }}
           returnKeyType="default"
         />
         <Pressable
           onPress={handleSend}
           disabled={!body.trim()}
-          className="w-11 h-11 bg-ink rounded-full items-center justify-center"
-          style={({ pressed }) => ({ opacity: pressed || !body.trim() ? 0.5 : 1 })}
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            backgroundColor: "#1A1A18",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed || !body.trim() ? 0.4 : 1,
+          })}
         >
-          <Text className="text-surface font-bold text-base">↑</Text>
+          <Text style={{ color: "#F2EFE8", fontSize: 18, fontWeight: "600" }}>↑</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

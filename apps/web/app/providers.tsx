@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink } from "@trpc/client";
 import superjson from "superjson";
 import { trpc } from "@/lib/trpc/client";
+import { createClient } from "@/lib/supabase/client";
 
 function getBaseUrl() {
   if (typeof window !== "undefined") return "";
@@ -12,7 +13,15 @@ function getBaseUrl() {
   return "http://localhost:3000";
 }
 
+// Singleton browser client — keeps the token refreshed for the lifetime of the tab.
+const supabase = createClient();
+
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {});
+    return () => subscription.unsubscribe();
+  }, []);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({

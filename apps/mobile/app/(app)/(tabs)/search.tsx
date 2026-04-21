@@ -16,21 +16,23 @@ export default function SearchTab() {
   const messages = data?.messages ?? [];
 
   return (
-    <View className="flex-1 bg-surface">
-      <View className="px-4 pt-14 pb-3 border-b border-border">
-        <Text className="text-2xl font-mono text-ink tracking-tight mb-3">Search</Text>
-        <View className="flex-row items-center border border-border rounded-lg px-3 bg-white">
-          <Text className="text-muted mr-2">🔍</Text>
+    <View style={{ flex: 1, backgroundColor: "#F2EFE8" }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#E2DDD2" }}>
+        <Text style={{ fontFamily: "monospace", fontSize: 20, fontWeight: "600", color: "#1A1A18", letterSpacing: -0.3, marginBottom: 12 }}>
+          search
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12 }}>
+          <Text style={{ fontFamily: "monospace", fontSize: 11, color: "#6B6A65", letterSpacing: 1, marginRight: 8 }}>Q</Text>
           <TextInput
-            className="flex-1 py-3 text-ink text-base"
+            style={{ flex: 1, paddingVertical: 10, fontSize: 16, color: "#1A1A18" }}
             placeholder="Search threads and messages..."
-            placeholderTextColor="#888780"
+            placeholderTextColor="#6B6A65"
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
             returnKeyType="search"
           />
-          {isFetching && <ActivityIndicator color="#888780" size="small" />}
+          {isFetching && <ActivityIndicator color="#6B6A65" size="small" />}
         </View>
       </View>
 
@@ -44,20 +46,22 @@ export default function SearchTab() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           query.trim().length >= 2 && !isFetching ? (
-            <View className="items-center py-16">
-              <Text className="text-muted text-base">No results for "{query}"</Text>
+            <View style={{ alignItems: "center", paddingVertical: 64 }}>
+              <Text style={{ color: "#6B6A65", fontSize: 14 }}>No results for "{query}"</Text>
             </View>
           ) : query.trim().length < 2 ? (
-            <View className="items-center py-16">
-              <Text className="text-muted text-base">Type at least 2 characters to search</Text>
+            <View style={{ alignItems: "center", paddingVertical: 64 }}>
+              <Text style={{ color: "#6B6A65", fontSize: 14 }}>Type at least 2 characters to search</Text>
             </View>
           ) : null
         }
         renderItem={({ item }) => {
           if (item.type === "header") {
             return (
-              <View className="px-4 py-2 bg-surface border-b border-border">
-                <Text className="text-xs text-muted uppercase tracking-wider font-medium">{(item as { label: string }).label}</Text>
+              <View style={{ paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#E2DDD2", backgroundColor: "#F2EFE8" }}>
+                <Text style={{ fontFamily: "monospace", fontSize: 10, fontWeight: "500", color: "#6B6A65", letterSpacing: 1.5, textTransform: "uppercase" }}>
+                  {(item as { label: string }).label}
+                </Text>
               </View>
             );
           }
@@ -65,13 +69,23 @@ export default function SearchTab() {
             const t = item as { id: string; title: string; status: string; groupId: string; groupName: string };
             return (
               <Pressable
-                onPress={() => router.push(`/(app)/thread/${t.id}`)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                className="px-4 py-4 border-b border-border flex-row items-center justify-between"
+                onPress={() => router.push({ pathname: "/(app)/thread/[threadId]", params: { threadId: t.id, title: t.title } })}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.6 : 1,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#E2DDD2",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                })}
               >
-                <View className="flex-1 mr-3">
-                  <Text className="text-ink text-base font-medium" numberOfLines={1}>{t.title.toLowerCase()}</Text>
-                  <Text className="text-muted text-xs mt-0.5">{t.groupName.toLowerCase()}</Text>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "500", color: "#1A1A18" }} numberOfLines={1}>
+                    {t.title.toLowerCase()}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#6B6A65", marginTop: 2 }}>{t.groupName.toLowerCase()}</Text>
                 </View>
                 <StatusBadge status={t.status as "OPEN" | "URGENT" | "DONE"} />
               </Pressable>
@@ -81,12 +95,19 @@ export default function SearchTab() {
             const m = item as { id: string; body: string; threadId: string; threadTitle: string; groupName: string };
             return (
               <Pressable
-                onPress={() => router.push(`/(app)/thread/${m.threadId}`)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                className="px-4 py-4 border-b border-border"
+                onPress={() => router.push({ pathname: "/(app)/thread/[threadId]", params: { threadId: m.threadId, title: m.threadTitle } })}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.6 : 1,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#E2DDD2",
+                })}
               >
-                <Text className="text-muted text-xs mb-1">{m.groupName.toLowerCase()} › {m.threadTitle.toLowerCase()}</Text>
-                <Text className="text-ink text-sm" numberOfLines={2}>{m.body}</Text>
+                <Text style={{ fontFamily: "monospace", fontSize: 10, color: "#6B6A65", letterSpacing: 0.5, marginBottom: 4 }}>
+                  {m.groupName.toLowerCase()} › {m.threadTitle.toLowerCase()}
+                </Text>
+                <Text style={{ fontSize: 13, color: "#1A1A18", lineHeight: 18 }} numberOfLines={2}>{m.body}</Text>
               </Pressable>
             );
           }

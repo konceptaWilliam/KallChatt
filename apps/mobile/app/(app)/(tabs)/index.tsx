@@ -7,37 +7,49 @@ export default function GroupsTab() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-surface items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: "#F2EFE8", alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#1A1A18" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-surface">
-      <View className="px-4 pt-14 pb-4 border-b border-border">
-        <Text className="text-2xl font-mono text-ink tracking-tight">coldsoup</Text>
+    <View style={{ flex: 1, backgroundColor: "#F2EFE8" }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#E2DDD2" }}>
+        <Text style={{ fontFamily: "monospace", fontSize: 20, fontWeight: "600", color: "#1A1A18", letterSpacing: -0.3 }}>
+          coldsoup
+        </Text>
       </View>
+
       <FlatList
         data={groups ?? []}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-        contentContainerStyle={groups?.length === 0 ? { flex: 1 } : undefined}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#1A1A18" />}
+        contentContainerStyle={(groups?.length ?? 0) === 0 ? { flex: 1 } : undefined}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center px-8">
-            <Text className="text-muted text-center text-base">
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <Text style={{ color: "#6B6A65", textAlign: "center", fontSize: 14 }}>
               No groups yet. Ask your admin to add you to one.
             </Text>
           </View>
         }
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => router.push(`/(app)/group/${item.id}`)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            className="flex-row items-center px-4 py-4 border-b border-border"
+            onPress={() => router.push({ pathname: "/(app)/group/[groupId]", params: { groupId: item.id, name: item.name } })}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.6 : 1,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: "#E2DDD2",
+              backgroundColor: "#F2EFE8",
+            })}
           >
-            <View className="w-2 h-2 rounded-full bg-accent mr-3" />
-            <Text className="text-ink text-base font-medium flex-1">{item.name.toLowerCase()}</Text>
+            <Text style={{ fontFamily: "monospace", fontSize: 14, color: "#1A1A18", fontWeight: "500" }}>
+              {item.name.toLowerCase()}
+            </Text>
           </Pressable>
         )}
       />

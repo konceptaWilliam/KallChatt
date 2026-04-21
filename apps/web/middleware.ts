@@ -26,9 +26,16 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refresh session — do not remove
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Wrap in try/catch so a paused/unreachable Supabase project doesn't
+  // log everyone out (getUser() throws on network failure).
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Supabase unreachable — let request through, tRPC will surface the error
+    return supabaseResponse;
+  }
 
   const { pathname } = request.nextUrl;
 

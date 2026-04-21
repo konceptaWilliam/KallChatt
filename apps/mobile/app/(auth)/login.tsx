@@ -6,8 +6,8 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { supabase } from "@/lib/supabase";
 
@@ -15,59 +15,92 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) return;
     setLoading(true);
+    setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (error) Alert.alert("Login failed", error.message);
+    if (error) setError(error.message);
   }
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-surface"
+      style={{ flex: 1, backgroundColor: "#F2EFE8" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View className="flex-1 justify-center px-6">
-        <Text className="text-4xl font-mono text-ink mb-2 tracking-tight">coldsoup</Text>
-        <Text className="text-muted text-base mb-10">Team threads, simply.</Text>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 }} keyboardShouldPersistTaps="handled">
+        <View style={{ marginBottom: 40 }}>
+          <Text style={{ fontFamily: "monospace", fontSize: 24, fontWeight: "600", color: "#1A1A18", letterSpacing: -0.5 }}>
+            coldsoup
+          </Text>
+          <Text style={{ fontSize: 14, color: "#6B6A65", marginTop: 4 }}>
+            Threads. Groups. Status. Nothing else.
+          </Text>
+        </View>
 
-        <TextInput
-          className="border border-border rounded-lg px-4 py-3 text-ink text-base mb-3 bg-white"
-          placeholder="Email"
-          placeholderTextColor="#888780"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-        />
-        <TextInput
-          className="border border-border rounded-lg px-4 py-3 text-ink text-base mb-6 bg-white"
-          placeholder="Password"
-          placeholderTextColor="#888780"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          returnKeyType="done"
-          onSubmitEditing={handleLogin}
-        />
+        <View style={{ gap: 16 }}>
+          <View>
+            <Text style={{ fontFamily: "monospace", fontSize: 10, fontWeight: "500", color: "#6B6A65", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>
+              Email address
+            </Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: "#1A1A18" }}
+              placeholder="you@example.com"
+              placeholderTextColor="#6B6A65"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
+            />
+          </View>
 
-        <Pressable
-          onPress={handleLogin}
-          disabled={loading || !email.trim() || !password.trim()}
-          className="bg-ink rounded-lg py-4 items-center"
-          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-        >
-          {loading ? (
-            <ActivityIndicator color="#F7F6F2" />
-          ) : (
-            <Text className="text-surface font-semibold text-base">Sign in</Text>
+          <View>
+            <Text style={{ fontFamily: "monospace", fontSize: 10, fontWeight: "500", color: "#6B6A65", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>
+              Password
+            </Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: "#1A1A18" }}
+              placeholder="••••••••"
+              placeholderTextColor="#6B6A65"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
+          </View>
+
+          {error && (
+            <View style={{ borderWidth: 1, borderColor: "#FECACA", backgroundColor: "#FEF2F2", paddingHorizontal: 12, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 13, color: "#DC2626" }}>{error}</Text>
+            </View>
           )}
-        </Pressable>
-      </View>
+
+          <Pressable
+            onPress={handleLogin}
+            disabled={loading || !email.trim() || !password.trim()}
+            style={({ pressed }) => ({
+              backgroundColor: "#1A1A18",
+              paddingVertical: 12,
+              alignItems: "center",
+              opacity: pressed || loading || !email.trim() || !password.trim() ? 0.4 : 1,
+            })}
+          >
+            {loading ? (
+              <ActivityIndicator color="#F2EFE8" />
+            ) : (
+              <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "500", color: "#F2EFE8" }}>
+                Sign in
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

@@ -1,13 +1,5 @@
-import { useRef, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  TextInput,
-  ActivityIndicator,
-} from "react-native";
+import { useRef, useState, useEffect } from "react";
+import { View, Text, FlatList, Pressable, RefreshControl, TextInput, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { trpc } from "@/lib/trpc";
@@ -17,13 +9,13 @@ import type { ThreadStatus } from "@coldsoup/core";
 function formatRelative(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
-  if (d === 1) return "Yesterday";
-  return `${d}d ago`;
+  if (d < 7) return `${d}d`;
+  return new Date(dateStr).toLocaleDateString("en", { month: "short", day: "numeric" });
 }
 
 type Thread = {
@@ -35,18 +27,17 @@ type Thread = {
 };
 
 function sortThreads(threads: Thread[]): Thread[] {
-  const urgent = threads.filter((t) => t.status === "URGENT").sort(byUpdated);
-  const open = threads.filter((t) => t.status === "OPEN").sort(byUpdated);
-  const done = threads.filter((t) => t.status === "DONE").sort(byUpdated);
-  return [...urgent, ...open, ...done];
-}
-
-function byUpdated(a: Thread, b: Thread) {
-  return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  return [...threads].sort((a, b) => {
+    const aDone = a.status === "DONE" ? 1 : 0;
+    const bDone = b.status === "DONE" ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 }
 
 export default function GroupScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { groupId, name } = useLocalSearchParams<{ groupId: string; name: string }>();
+  const navigation = useNavigation();
   const { data: threads, isLoading, refetch, isRefetching } = trpc.threads.list.useQuery({ groupId });
   const createThread = trpc.threads.create.useMutation({
     onSuccess: () => {
@@ -58,65 +49,78 @@ export default function GroupScreen() {
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [newTitle, setNewTitle] = useState("");
-  const snapPoints = ["40%"];
-
   const sorted = threads ? sortThreads(threads as Thread[]) : [];
+
+  useEffect(() => {
+    if (name) {
+      navigation.setOptions({ title: name.toLowerCase() });
+    }
+  }, [name, navigation]);
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-surface items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: "#F2EFE8", alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#1A1A18" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: "#F2EFE8" }}>
       <Pressable
         onPress={() => bottomSheetRef.current?.expand()}
-        className="absolute bottom-6 right-6 z-10 w-14 h-14 bg-ink rounded-full items-center justify-center"
-        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+        style={({ pressed }) => ({
+          position: "absolute", bottom: 24, right: 20, zIndex: 10,
+          width: 44, height: 44, backgroundColor: "#1A1A18",
+          alignItems: "center", justifyContent: "center",
+          opacity: pressed ? 0.7 : 1,
+        })}
       >
-        <Text className="text-surface text-2xl leading-none">+</Text>
+        <Text style={{ color: "#F2EFE8", fontSize: 22, lineHeight: 24 }}>+</Text>
       </Pressable>
 
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#1A1A18" />}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center px-8 py-20">
-            <Text className="text-muted text-center text-base">No threads yet. Tap + to start one.</Text>
+          <View style={{ alignItems: "center", padding: 32 }}>
+            <Text style={{ color: "#6B6A65", fontSize: 14 }}>No threads yet. Tap + to start one.</Text>
           </View>
         }
         renderItem={({ item }) => {
           const lastMsg = item.messages?.[0];
           const preview = lastMsg && !lastMsg.is_deleted ? lastMsg.body : "";
-          const isUrgent = item.status === "URGENT";
           const isDone = item.status === "DONE";
+          const isUrgent = item.status === "URGENT";
           return (
             <Pressable
-              onPress={() => router.push(`/(app)/thread/${item.id}`)}
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.7 : isDone ? 0.4 : 1,
-                borderLeftWidth: isUrgent ? 3 : 0,
-                borderLeftColor: "#EF9F27",
+              onPress={() => router.push({
+                pathname: "/(app)/thread/[threadId]",
+                params: { threadId: item.id, title: item.title },
               })}
-              className="px-4 py-4 border-b border-border bg-surface flex-row items-start gap-3"
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.6 : isDone ? 0.4 : 1,
+                borderLeftWidth: isUrgent ? 2 : 0,
+                borderLeftColor: "#C79B6A",
+                borderBottomWidth: 1,
+                borderBottomColor: "#E2DDD2",
+                backgroundColor: "#F2EFE8",
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              })}
             >
-              <View className="flex-1">
-                <View className="flex-row items-center justify-between mb-1">
-                  <Text className="text-ink text-base font-medium flex-1 mr-2" numberOfLines={1}>
-                    {item.title.toLowerCase()}
-                  </Text>
-                  <Text className="text-muted text-xs">{formatRelative(item.updated_at)}</Text>
-                </View>
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-muted text-sm flex-1 mr-2" numberOfLines={1}>
-                    {preview || " "}
-                  </Text>
-                  <StatusBadge status={item.status} />
-                </View>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
+                <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "500", color: "#1A1A18", flex: 1, marginRight: 8 }} numberOfLines={1}>
+                  {item.title.toLowerCase()}
+                </Text>
+                <Text style={{ fontSize: 11, color: "#6B6A65" }}>{formatRelative(item.updated_at)}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 12, color: "#6B6A65", flex: 1, marginRight: 8 }} numberOfLines={1}>
+                  {preview || " "}
+                </Text>
+                <StatusBadge status={item.status} />
               </View>
             </Pressable>
           );
@@ -126,38 +130,39 @@ export default function GroupScreen() {
       <BottomSheet
         ref={bottomSheetRef}
         index={-1}
-        snapPoints={snapPoints}
+        snapPoints={["40%"]}
         enablePanDownToClose
-        backgroundStyle={{ backgroundColor: "#F7F6F2" }}
-        handleIndicatorStyle={{ backgroundColor: "#E2E0D8" }}
+        backgroundStyle={{ backgroundColor: "#F2EFE8", borderRadius: 0 }}
+        handleIndicatorStyle={{ backgroundColor: "#E2DDD2" }}
       >
-        <BottomSheetView className="px-4 pt-4 pb-8">
-          <Text className="text-ink text-lg font-semibold mb-4">New thread</Text>
+        <BottomSheetView style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}>
+          <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "600", color: "#1A1A18", marginBottom: 16, textTransform: "uppercase", letterSpacing: 1 }}>
+            New thread
+          </Text>
           <TextInput
-            className="border border-border rounded-lg px-4 py-3 text-ink text-base mb-4 bg-white"
+            style={{ borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: "#1A1A18", marginBottom: 12 }}
             placeholder="Thread title"
-            placeholderTextColor="#888780"
+            placeholderTextColor="#6B6A65"
             value={newTitle}
             onChangeText={setNewTitle}
             autoFocus
             returnKeyType="done"
-            onSubmitEditing={() => {
-              if (newTitle.trim()) createThread.mutate({ groupId, title: newTitle.trim() });
-            }}
+            onSubmitEditing={() => { if (newTitle.trim()) createThread.mutate({ groupId, title: newTitle.trim() }); }}
           />
           <Pressable
-            onPress={() => {
-              if (newTitle.trim()) createThread.mutate({ groupId, title: newTitle.trim() });
-            }}
+            onPress={() => { if (newTitle.trim()) createThread.mutate({ groupId, title: newTitle.trim() }); }}
             disabled={!newTitle.trim() || createThread.isPending}
-            className="bg-ink rounded-lg py-4 items-center"
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({
+              backgroundColor: "#1A1A18",
+              paddingVertical: 12,
+              alignItems: "center",
+              opacity: pressed || !newTitle.trim() || createThread.isPending ? 0.4 : 1,
+            })}
           >
-            {createThread.isPending ? (
-              <ActivityIndicator color="#F7F6F2" />
-            ) : (
-              <Text className="text-surface font-semibold text-base">Create</Text>
-            )}
+            {createThread.isPending
+              ? <ActivityIndicator color="#F2EFE8" />
+              : <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "500", color: "#F2EFE8" }}>Create</Text>
+            }
           </Pressable>
         </BottomSheetView>
       </BottomSheet>

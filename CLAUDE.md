@@ -84,6 +84,7 @@ Specialized agents live in `.agents/skills/`. Invoke by name:
 | Responsivity Agent | `.agents/skills/responsivity-agent/agent-responsivity.md` | Tests layout across all viewports (320px–1920px), mobile drawer, touch targets, keyboard nav. Outputs structured pass/warn/fail report.                           |
 | Speed Agent        | `.agents/skills/speed-agent/agent-speed.md`               | Performance audit — Core Web Vitals, bundle size, query efficiency, Realtime latency, render cost.                                                                |
 | Security Agent     | `.agents/skills/security-agent/agent-security.md`         | Security audit — RLS, tRPC auth, invite tokens, session security, env var exposure, input validation.                                                             |
+| RN Design Agent    | `.agents/skills/rn-design-agent/SKILL.md`                 | React Native / Expo design specialist for `apps/mobile`. Audits and implements UI matching the Coldsoup design language (colors, typography, shape, spacing).     |
 
 @.agents/skills/caveman/SKILL.md
 @.agents/skills/caveman-compress/SKILL.md
@@ -91,3 +92,4 @@ Specialized agents live in `.agents/skills/`. Invoke by name:
 @.agents/skills/responsivity-agent/agent-responsivity.md
 @.agents/skills/security-agent/agent-security.md
 @.agents/skills/speed-agent/agent-speed.md
+@.agents/skills/rn-design-agent/SKILL.md

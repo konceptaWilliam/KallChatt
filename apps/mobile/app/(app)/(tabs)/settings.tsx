@@ -5,25 +5,23 @@ import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 
+function Label({ children }: { children: string }) {
+  return (
+    <Text style={{ fontFamily: "monospace", fontSize: 10, fontWeight: "500", color: "#6B6A65", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>
+      {children}
+    </Text>
+  );
+}
+
 export default function SettingsTab() {
   const utils = trpc.useUtils();
   const { data: profile, isLoading } = trpc.profile.get.useQuery();
-  const updateProfile = trpc.profile.update.useMutation({
-    onSuccess: () => utils.profile.get.invalidate(),
-  });
+  const updateProfile = trpc.profile.update.useMutation({ onSuccess: () => utils.profile.get.invalidate() });
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState("");
 
-  function startEdit() {
-    setName(profile?.display_name ?? "");
-    setEditingName(true);
-  }
-
-  function saveName() {
-    if (!name.trim()) return;
-    updateProfile.mutate({ displayName: name.trim() });
-    setEditingName(false);
-  }
+  function startEdit() { setName(profile?.display_name ?? ""); setEditingName(true); }
+  function saveName() { if (name.trim()) updateProfile.mutate({ displayName: name.trim() }); setEditingName(false); }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -31,26 +29,22 @@ export default function SettingsTab() {
   }
 
   if (isLoading) {
-    return (
-      <View className="flex-1 bg-surface items-center justify-center">
-        <ActivityIndicator color="#1A1A18" />
-      </View>
-    );
+    return <View style={{ flex: 1, backgroundColor: "#F2EFE8", alignItems: "center", justifyContent: "center" }}><ActivityIndicator color="#1A1A18" /></View>;
   }
 
   return (
-    <ScrollView className="flex-1 bg-surface">
-      <View className="px-4 pt-14 pb-4 border-b border-border">
-        <Text className="text-2xl font-mono text-ink tracking-tight">Settings</Text>
+    <ScrollView style={{ flex: 1, backgroundColor: "#F2EFE8" }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#E2DDD2" }}>
+        <Text style={{ fontFamily: "monospace", fontSize: 20, fontWeight: "600", color: "#1A1A18" }}>Settings</Text>
       </View>
 
-      <View className="px-4 py-6 gap-6">
+      <View style={{ padding: 16, gap: 24 }}>
         <View>
-          <Text className="text-xs text-muted uppercase tracking-wider mb-2">Display name</Text>
+          <Label>Display name</Label>
           {editingName ? (
-            <View className="flex-row items-center gap-3">
+            <View style={{ flexDirection: "row", gap: 8 }}>
               <TextInput
-                className="flex-1 border border-border rounded-lg px-3 py-2 text-ink text-base bg-white"
+                style={{ flex: 1, borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED", paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: "#1A1A18" }}
                 value={name}
                 onChangeText={setName}
                 autoFocus
@@ -58,37 +52,36 @@ export default function SettingsTab() {
                 onSubmitEditing={saveName}
                 returnKeyType="done"
               />
-              <Pressable onPress={saveName} className="px-3 py-2">
-                <Text className="text-ink font-medium">Save</Text>
+              <Pressable onPress={saveName} style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#1A1A18", justifyContent: "center" }}>
+                <Text style={{ fontFamily: "monospace", fontSize: 12, color: "#F2EFE8" }}>Save</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable onPress={startEdit}>
-              <Text className="text-ink text-base">{profile?.display_name ?? "—"}</Text>
-              <Text className="text-muted text-xs mt-1">Tap to edit</Text>
+              <Text style={{ fontSize: 14, color: "#1A1A18" }}>{profile?.display_name ?? "—"}</Text>
+              <Text style={{ fontSize: 11, color: "#6B6A65", marginTop: 2 }}>Tap to edit</Text>
             </Pressable>
           )}
         </View>
 
         <View>
-          <Text className="text-xs text-muted uppercase tracking-wider mb-2">Email</Text>
-          <Text className="text-ink text-base">{profile?.email ?? "—"}</Text>
+          <Label>Email</Label>
+          <Text style={{ fontSize: 14, color: "#1A1A18" }}>{profile?.email ?? "—"}</Text>
         </View>
 
-        <View className="border-t border-border pt-6">
+        <View style={{ borderTopWidth: 1, borderTopColor: "#E2DDD2", paddingTop: 24 }}>
           <Pressable
             onPress={() => Alert.alert("Sign out", "Are you sure?", [
               { text: "Cancel", style: "cancel" },
               { text: "Sign out", style: "destructive", onPress: handleSignOut },
             ])}
-            className="bg-ink rounded-lg py-4 items-center"
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({ backgroundColor: "#1A1A18", paddingVertical: 12, alignItems: "center", opacity: pressed ? 0.7 : 1 })}
           >
-            <Text className="text-surface font-semibold text-base">Sign out</Text>
+            <Text style={{ fontFamily: "monospace", fontSize: 13, fontWeight: "500", color: "#F2EFE8" }}>Sign out</Text>
           </Pressable>
         </View>
 
-        <Text className="text-muted text-xs text-center">
+        <Text style={{ fontFamily: "monospace", fontSize: 11, color: "#9A988F", textAlign: "center" }}>
           v{Constants.expoConfig?.version ?? "1.0.0"}
         </Text>
       </View>

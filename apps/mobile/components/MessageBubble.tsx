@@ -1,84 +1,75 @@
 import { View, Text } from "react-native";
 
-interface Reaction {
-  type: string;
-  count: number;
-  userReacted: boolean;
-}
+interface Reaction { type: string; count: number; userReacted: boolean; }
+interface ReplyTo { id: string; body: string; author_name: string; }
 
-interface ReplyTo {
-  id: string;
-  body: string;
-  author_name: string;
-}
-
-interface MessageBubbleProps {
+interface Props {
   message: {
-    id: string;
-    body: string;
-    created_at: string;
-    edited_at?: string | null;
-    is_deleted?: boolean;
-    reactions?: Reaction[];
-    reply_to?: ReplyTo | null;
+    id: string; body: string; created_at: string;
+    edited_at?: string | null; is_deleted?: boolean;
+    reactions?: Reaction[]; reply_to?: ReplyTo | null;
   };
   displayName: string;
   avatarUrl: string | null;
 }
 
+// Deterministic warm hue from name — mirrors the web app's avatar color logic
+const AVATAR_PALETTE = [
+  "#D4C5A9", "#C9B99A", "#BFB48A", "#D9C4A8", "#C4B49A",
+  "#B8A88A", "#CDB99A", "#D2BFA0", "#C8B598", "#BDB090",
+  "#D6C8A8", "#CAB99C", "#C0B08A", "#D4C2A0", "#CBB898",
+];
+
+function avatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
 function initials(name: string) {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function MessageBubble({ message, displayName, avatarUrl }: MessageBubbleProps) {
+export function MessageBubble({ message, displayName }: Props) {
   const isDeleted = message.is_deleted;
-
+  const bg = avatarColor(displayName);
   return (
-    <View className="px-4 py-3 flex-row items-start gap-3">
-      <View className="w-8 h-8 rounded-full bg-border items-center justify-center flex-shrink-0">
-        <Text className="text-xs text-muted font-semibold">{initials(displayName)}</Text>
+    <View style={{ paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+      <View style={{ width: 28, height: 28, backgroundColor: bg, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Text style={{ fontSize: 9, color: "#1A1A18", fontWeight: "600", fontFamily: "monospace" }}>{initials(displayName)}</Text>
       </View>
-      <View className="flex-1">
-        <View className="flex-row items-baseline gap-2 mb-1">
-          <Text className="text-ink text-sm font-semibold">{displayName}</Text>
-          <Text className="text-muted text-xs">{formatTime(message.created_at)}</Text>
-          {message.edited_at && <Text className="text-muted text-xs">(edited)</Text>}
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginBottom: 3 }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#1A1A18" }}>{displayName}</Text>
+          <Text style={{ fontSize: 11, color: "#9A988F" }}>{formatTime(message.created_at)}</Text>
+          {message.edited_at && <Text style={{ fontSize: 11, color: "#9A988F" }}>(edited)</Text>}
         </View>
         {message.reply_to && (
-          <View className="border-l-2 border-border pl-2 mb-2">
-            <Text className="text-muted text-xs font-medium">{message.reply_to.author_name}</Text>
-            <Text className="text-muted text-xs" numberOfLines={1}>{message.reply_to.body}</Text>
+          <View style={{ borderLeftWidth: 2, borderLeftColor: "#E2DDD2", paddingLeft: 8, marginBottom: 6 }}>
+            <Text style={{ fontSize: 11, color: "#6B6A65", fontWeight: "600" }}>{message.reply_to.author_name}</Text>
+            <Text style={{ fontSize: 11, color: "#6B6A65" }} numberOfLines={1}>{message.reply_to.body}</Text>
           </View>
         )}
         <Text
-          className="text-ink text-base"
-          style={{ opacity: isDeleted ? 0.4 : 1, overflow: "hidden" }}
+          style={{ fontSize: 14, color: isDeleted ? "#9A988F" : "#1A1A18", fontStyle: isDeleted ? "italic" : "normal", lineHeight: 20 }}
           selectable
         >
           {isDeleted ? "This message was deleted." : message.body}
         </Text>
         {!isDeleted && message.reactions && message.reactions.some((r) => r.count > 0) && (
-          <View className="flex-row gap-2 mt-2">
-            {message.reactions
-              .filter((r) => r.count > 0)
-              .map((r) => (
-                <View
-                  key={r.type}
-                  className="flex-row items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-white"
-                >
-                  <Text className="text-sm">{r.type}</Text>
-                  <Text className="text-muted text-xs">{r.count}</Text>
-                </View>
-              ))}
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+            {message.reactions.filter((r) => r.count > 0).map((r) => (
+              <View key={r.type} style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#E2DDD2", backgroundColor: "#F7F4ED" }}>
+                <Text style={{ fontSize: 12 }}>{r.type}</Text>
+                <Text style={{ fontSize: 11, color: "#6B6A65" }}>{r.count}</Text>
+              </View>
+            ))}
           </View>
         )}
       </View>
