@@ -146,14 +146,14 @@ function PollView({
   const totalVotes = poll.options.reduce((s, o) => s + o.vote_count, 0);
 
   return (
-    <div className="mt-1 border border-border bg-surface p-4 max-w-full shadow-lg">
+    <div className="mt-1 border border-border bg-surface p-3 w-full sm:max-w-[360px] shadow-lg">
       <p className="font-mono text-[12px] font-semibold text-ink mb-1">
         {poll.question}
       </p>
-      <p className="font-mono text-[10px] text-muted mb-3">
-        {totalVotes} total vote{totalVotes !== 1 ? "s" : ""}
+      <p className="font-mono text-[10px] text-muted mb-2">
+        {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
       </p>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {poll.options.map((opt) => {
           const pct =
             totalVotes > 0
@@ -165,17 +165,17 @@ function PollView({
                 className="w-full text-left"
                 onClick={() => vote.mutate({ pollOptionId: opt.id })}
               >
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-0.5">
                   <span
-                    className={`font-mono text-[12px] ${opt.user_voted ? "text-ink font-semibold" : "text-ink"}`}
+                    className={`font-mono text-[11px] ${opt.user_voted ? "text-ink font-semibold" : "text-ink"}`}
                   >
                     {opt.text}
                   </span>
                   <span className="font-mono text-[10px] text-muted ml-2 flex-shrink-0">
-                    {opt.vote_count} ({pct}%)
+                    {pct}%
                   </span>
                 </div>
-                <div className="h-1 bg-surface-2 border border-border mb-1.5">
+                <div className="h-1 bg-surface-2 border border-border mb-1">
                   <div
                     className={`h-full ${opt.user_voted ? "bg-pastel" : "bg-pastel/60"}`}
                     style={{ width: `${pct}%` }}
@@ -183,14 +183,15 @@ function PollView({
                 </div>
               </button>
               {opt.voters.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-0.5">
                   {opt.voters.map((v) => (
                     <div
                       key={v.id}
-                      className="flex items-center gap-1 border border-border px-1.5 py-0.5"
+                      title={v.display_name}
+                      className="flex items-center gap-1 border border-border px-1 py-0.5 sm:px-1"
                     >
                       <div
-                        className="w-5 h-5 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[8px] font-semibold"
+                        className="w-4 h-4 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[8px] font-semibold"
                         style={{
                           background: "hsl(180 30% 92%)",
                           color: "hsl(180 40% 28%)",
@@ -206,7 +207,7 @@ function PollView({
                           v.display_name.slice(0, 1).toUpperCase()
                         )}
                       </div>
-                      <span className="font-mono text-[10px] text-ink">
+                      <span className="font-mono text-[10px] text-ink sm:hidden">
                         {v.display_name}
                       </span>
                     </div>
@@ -214,7 +215,7 @@ function PollView({
                 </div>
               ) : (
                 <span className="font-mono text-[10px] text-muted-2">
-                  No votes yet
+                  No votes
                 </span>
               )}
             </div>
@@ -478,6 +479,11 @@ function AttachmentModal({
     try {
       const res = await fetch(attachment.url);
       const blob = await res.blob();
+      const file = new File([blob], attachment.name, { type: blob.type });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -826,7 +832,7 @@ function ImageGallery({
               rotate: `${expanded ? expandedRot : stackedRot}deg`,
               width: "130px",
               marginLeft: i === 0 ? 0 : expanded ? "10px" : "-92px",
-              zIndex: expanded ? "auto" : n - i,
+              zIndex: n - i,
               transition: isDragging
                 ? "box-shadow 200ms ease"
                 : "rotate 320ms cubic-bezier(0.34,1.56,0.64,1), margin-left 280ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms ease",
