@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 
 function parseCookies(cookieHeader: string) {
@@ -11,25 +12,39 @@ function parseCookies(cookieHeader: string) {
 
 export async function createContext({ req }: FetchCreateContextFnOptions) {
   const cookieHeader = req.headers.get("cookie") ?? "";
+  const authHeader = req.headers.get("authorization") ?? "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return parseCookies(cookieHeader);
-        },
-        setAll() {
-          // No-op — can't set cookies from tRPC handler
-        },
-      },
-    }
+    bearerToken
+      ? {
+          cookies: { getAll: () => [], setAll: () => {} },
+          global: { headers: { Authorization: `Bearer ${bearerToken}` } },
+        }
+      : {
+          cookies: {
+            getAll() { return parseCookies(cookieHeader); },
+            setAll() {},
+          },
+        }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+
+  if (bearerToken) {
+    // For mobile: validate JWT directly
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data } = await anonClient.auth.getUser(bearerToken);
+    user = data.user;
+  } else {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   let profile: Profile | null = null;
   if (user) {

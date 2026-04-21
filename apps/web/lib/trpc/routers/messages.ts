@@ -246,6 +246,34 @@ export const messagesRouter = router({
         }
       }
 
+      // Send push notifications to other group members
+      const senderName = (data?.profiles as unknown as { display_name: string } | null)?.display_name ?? "Someone";
+      if (thread) {
+        const { data: members } = await admin
+          .from("group_memberships")
+          .select("profiles(push_token)")
+          .eq("group_id", thread.group_id)
+          .neq("user_id", profile.id);
+
+        const tokens = (members ?? [])
+          .map((m) => (m.profiles as unknown as { push_token: string | null } | null)?.push_token)
+          .filter((t): t is string => Boolean(t));
+
+        if (tokens.length > 0) {
+          const pushMessages = tokens.map((token) => ({
+            to: token,
+            title: senderName,
+            body: input.body.slice(0, 100) || "New message",
+            data: { threadId: input.threadId },
+          }));
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pushMessages),
+          }).catch(() => null);
+        }
+      }
+
       return {
         ...data,
         reply_to,

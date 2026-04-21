@@ -51,6 +51,15 @@ export const profileRouter = router({
       return data;
     }),
 
+  savePushToken: protectedProcedure
+    .input(z.object({ token: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      const { profile } = ctx;
+      const admin = createAdminClient();
+      await admin.from("profiles").update({ push_token: input.token }).eq("id", profile.id);
+      return { success: true };
+    }),
+
   sendPasswordChangedEmail: protectedProcedure.mutation(async ({ ctx }) => {
     const { profile } = ctx;
     const resend = new Resend(process.env.RESEND_API_KEY);
