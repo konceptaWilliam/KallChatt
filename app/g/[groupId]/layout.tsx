@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
+import { SwipeToOpenSidebar } from "@/components/swipe-to-open-sidebar";
 import { UnreadProvider } from "@/lib/unread-context";
 import { MobileSidebarProvider } from "@/lib/mobile-sidebar-context";
 
@@ -48,7 +49,7 @@ export default async function GroupLayout({
             userDisplayName={profile.display_name}
             avatarUrl={profile.avatar_url ?? null}
           />
-          <main className="flex-1 flex overflow-hidden min-w-0">{children}</main>
+          <SwipeToOpenSidebar>{children}</SwipeToOpenSidebar>
         </div>
       </MobileSidebarProvider>
     </UnreadProvider>

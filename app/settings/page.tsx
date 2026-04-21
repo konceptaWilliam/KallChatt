@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc/client";
 import { createClient } from "@/lib/supabase/client";
+import { CreateGroupModal } from "@/components/sidebar";
 
 const CROP_DISPLAY = 280;
 const MAX_ZOOM = 4;
@@ -22,10 +23,19 @@ function CropModal({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const dragRef = useRef<{
+    sx: number;
+    sy: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
   const lastPinchDist = useRef<number | null>(null);
   const cropAreaRef = useRef<HTMLDivElement>(null);
-  const liveRef = useRef({ zoom: 1, offset: { x: 0, y: 0 }, cover: null as { w: number; h: number } | null });
+  const liveRef = useRef({
+    zoom: 1,
+    offset: { x: 0, y: 0 },
+    cover: null as { w: number; h: number } | null,
+  });
 
   // Cover-fit dimensions: whichever dimension is shortest is set to CROP_DISPLAY
   const cover = useMemo(() => {
@@ -41,7 +51,12 @@ function CropModal({
     liveRef.current = { zoom, offset, cover };
   });
 
-  function clampOffset(ox: number, oy: number, z: number, cv: { w: number; h: number }) {
+  function clampOffset(
+    ox: number,
+    oy: number,
+    z: number,
+    cv: { w: number; h: number },
+  ) {
     const mx = (cv.w * z - CROP_DISPLAY) / 2;
     const my = (cv.h * z - CROP_DISPLAY) / 2;
     return {
@@ -74,12 +89,14 @@ function CropModal({
 
   function moveDrag(cx: number, cy: number) {
     if (!dragRef.current || !cover) return;
-    setOffset(clampOffset(
-      dragRef.current.ox + cx - dragRef.current.sx,
-      dragRef.current.oy + cy - dragRef.current.sy,
-      zoom,
-      cover,
-    ));
+    setOffset(
+      clampOffset(
+        dragRef.current.ox + cx - dragRef.current.sx,
+        dragRef.current.oy + cy - dragRef.current.sy,
+        zoom,
+        cover,
+      ),
+    );
   }
 
   function endDrag() {
@@ -100,17 +117,28 @@ function CropModal({
 
     const img = new Image();
     img.src = src;
-    if (!img.complete) await new Promise<void>((r) => { img.onload = () => r(); });
+    if (!img.complete)
+      await new Promise<void>((r) => {
+        img.onload = () => r();
+      });
 
     const canvas = document.createElement("canvas");
     canvas.width = 400;
     canvas.height = 400;
-    canvas.getContext("2d")!.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, 400, 400);
-    canvas.toBlob((blob) => { if (blob) onSave(blob); }, "image/jpeg", 0.92);
+    canvas
+      .getContext("2d")!
+      .drawImage(img, srcX, srcY, srcW, srcH, 0, 0, 400, 400);
+    canvas.toBlob(
+      (blob) => {
+        if (blob) onSave(blob);
+      },
+      "image/jpeg",
+      0.92,
+    );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-surface border border-border w-full max-w-sm">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <span className="font-mono text-xs text-muted uppercase tracking-wider">
@@ -124,7 +152,7 @@ function CropModal({
           </button>
         </div>
 
-        <div className="p-4">
+        <div className="p-2 sm:p-4">
           {/* Crop area */}
           <div
             ref={cropAreaRef}
@@ -135,7 +163,10 @@ function CropModal({
               background: "#000",
               cursor: isDragging ? "grabbing" : "grab",
             }}
-            onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              startDrag(e.clientX, e.clientY);
+            }}
             onMouseMove={(e) => moveDrag(e.clientX, e.clientY)}
             onMouseUp={endDrag}
             onMouseLeave={endDrag}
@@ -153,17 +184,27 @@ function CropModal({
               e.preventDefault();
               if (e.touches.length === 1 && dragRef.current) {
                 moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-              } else if (e.touches.length === 2 && lastPinchDist.current && cover) {
+              } else if (
+                e.touches.length === 2 &&
+                lastPinchDist.current &&
+                cover
+              ) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 const dist = Math.hypot(dx, dy);
-                const nz = Math.min(MAX_ZOOM, Math.max(1, zoom * (dist / lastPinchDist.current)));
+                const nz = Math.min(
+                  MAX_ZOOM,
+                  Math.max(1, zoom * (dist / lastPinchDist.current)),
+                );
                 setOffset((prev) => clampOffset(prev.x, prev.y, nz, cover));
                 setZoom(nz);
                 lastPinchDist.current = dist;
               }
             }}
-            onTouchEnd={() => { endDrag(); lastPinchDist.current = null; }}
+            onTouchEnd={() => {
+              endDrag();
+              lastPinchDist.current = null;
+            }}
           >
             <img
               src={src}
@@ -202,7 +243,8 @@ function CropModal({
                 style={{
                   ...pos,
                   borderTop: pos.top === 0 ? "2px solid white" : undefined,
-                  borderBottom: pos.bottom === 0 ? "2px solid white" : undefined,
+                  borderBottom:
+                    pos.bottom === 0 ? "2px solid white" : undefined,
                   borderLeft: pos.left === 0 ? "2px solid white" : undefined,
                   borderRight: pos.right === 0 ? "2px solid white" : undefined,
                 }}
@@ -221,7 +263,8 @@ function CropModal({
               value={zoom}
               onChange={(e) => {
                 const nz = parseFloat(e.target.value);
-                if (cover) setOffset((prev) => clampOffset(prev.x, prev.y, nz, cover));
+                if (cover)
+                  setOffset((prev) => clampOffset(prev.x, prev.y, nz, cover));
                 setZoom(nz);
               }}
               className="flex-1 accent-ink h-1"
@@ -294,20 +337,25 @@ function ProfileSection() {
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
-    await updateProfile.mutateAsync({ avatarUrl: `${publicUrl}?t=${Date.now()}` });
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(path);
+    await updateProfile.mutateAsync({
+      avatarUrl: `${publicUrl}?t=${Date.now()}`,
+    });
     setAvatarImgError(false);
     setUploading(false);
   }
 
   if (isLoading) return <div className="h-20 bg-border/40 animate-pulse" />;
 
-  const initials = profile?.display_name
-    ?.split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) ?? "?";
+  const initials =
+    profile?.display_name
+      ?.split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) ?? "?";
 
   return (
     <div>
@@ -356,7 +404,9 @@ function ProfileSection() {
             />
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium text-ink">{profile?.display_name}</p>
+            <p className="text-sm font-medium text-ink">
+              {profile?.display_name}
+            </p>
             <p className="text-xs text-muted">{profile?.email}</p>
             {uploadError && (
               <p className="text-xs text-red-600 mt-0.5">{uploadError}</p>
@@ -379,7 +429,7 @@ function ProfileSection() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={60}
-              className="flex-1 border border-border bg-surface-2 px-3 py-2 text-sm text-ink focus:outline-none focus:border-ink"
+              className="flex-1 border border-border bg-surface-2 px-3 py-2 text-base md:text-sm text-ink focus:outline-none focus:border-ink"
               autoFocus
             />
             <button
@@ -452,7 +502,9 @@ function ChangePasswordSection() {
       return;
     }
 
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
 
     if (updateError) {
       setError(updateError.message);
@@ -475,7 +527,10 @@ function ChangePasswordSection() {
       <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
         Change password
       </h2>
-      <form onSubmit={handleSubmit} className="border border-border p-4 space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="border border-border p-4 space-y-4"
+      >
         <div>
           <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-2">
             Current password
@@ -486,7 +541,7 @@ function ChangePasswordSection() {
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-base md:text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -500,7 +555,7 @@ function ChangePasswordSection() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-base md:text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -514,7 +569,7 @@ function ChangePasswordSection() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
+            className="w-full border border-border bg-surface-2 px-3 py-2 text-base md:text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
           />
         </div>
 
@@ -527,7 +582,9 @@ function ChangePasswordSection() {
 
         <button
           type="submit"
-          disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+          disabled={
+            loading || !currentPassword || !newPassword || !confirmPassword
+          }
           className="bg-ink text-surface font-mono text-sm px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink/90 transition-colors"
         >
           {loading ? "Updating..." : "Change password"}
@@ -543,12 +600,23 @@ function MyGroupsSection() {
   const leaveGroup = trpc.groups.leave.useMutation({
     onSuccess: () => utils.groups.list.invalidate(),
   });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
 
   return (
     <div>
-      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
-        My groups
-      </h2>
+      {createOpen && <CreateGroupModal onClose={() => setCreateOpen(false)} />}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-mono text-xs text-muted uppercase tracking-wider">
+          My groups
+        </h2>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="font-mono text-xs text-muted hover:text-ink transition-colors"
+        >
+          + New group
+        </button>
+      </div>
       {isLoading ? (
         <div className="h-10 bg-border/40 animate-pulse" />
       ) : (groups ?? []).length === 0 ? (
@@ -558,15 +626,39 @@ function MyGroupsSection() {
       ) : (
         <div className="border border-border divide-y divide-border">
           {(groups ?? []).map((group) => (
-            <div key={group.id} className="px-4 py-3 flex items-center justify-between gap-4">
-              <span className="font-mono text-sm text-ink">. {group.name}</span>
-              <button
-                onClick={() => leaveGroup.mutate({ groupId: group.id })}
-                disabled={leaveGroup.isPending}
-                className="font-mono text-xs text-muted hover:text-red-600 transition-colors"
-              >
-                Leave
-              </button>
+            <div
+              key={group.id}
+              className="px-4 py-3 flex items-center justify-between gap-4"
+            >
+              <span className="font-mono text-sm text-ink lowercase">. {group.name}</span>
+              {confirmLeave === group.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-muted">Sure?</span>
+                  <button
+                    onClick={() => {
+                      leaveGroup.mutate({ groupId: group.id });
+                      setConfirmLeave(null);
+                    }}
+                    disabled={leaveGroup.isPending}
+                    className="font-mono text-xs text-red-600 hover:text-red-700 transition-colors"
+                  >
+                    Yes.
+                  </button>
+                  <button
+                    onClick={() => setConfirmLeave(null)}
+                    className="font-mono text-xs text-muted hover:text-ink transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmLeave(group.id)}
+                  className="font-mono text-xs text-muted hover:text-red-600 transition-colors"
+                >
+                  Leave
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -574,8 +666,6 @@ function MyGroupsSection() {
     </div>
   );
 }
-
-
 
 function LogOutSection() {
   const [signingOut, setSigningOut] = useState(false);
@@ -589,7 +679,9 @@ function LogOutSection() {
 
   return (
     <div>
-      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">Account</h2>
+      <h2 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
+        Account
+      </h2>
       <div className="border border-border px-4 py-3">
         <button
           onClick={handleSignOut}
@@ -607,7 +699,7 @@ export default function SettingsPage() {
   return (
     <div className="flex h-screen bg-surface">
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-6 py-8">
+        <div className="max-w-2xl mx-auto px-4 md:px-6 py-8">
           <div className="mb-8 flex items-center gap-4">
             <Link
               href="/"

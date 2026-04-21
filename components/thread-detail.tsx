@@ -36,7 +36,11 @@ const REACTION_DEFAULTS: Reaction[] = [
   { type: "❓", count: 0, userReacted: false, users: [] },
 ];
 
-type PollVoter = { id: string; display_name: string; avatar_url: string | null };
+type PollVoter = {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+};
 
 type PollOption = {
   id: string;
@@ -66,17 +70,35 @@ type Message = {
   reactions: Reaction[];
   reply_to_id: string | null;
   reply_to: ReplyTo | null;
-  profiles: { id: string; display_name: string; avatar_url: string | null } | null;
+  profiles: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null;
 };
 
-function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; threadId: string; myInfo: { id: string; display_name: string; avatar_url: string | null } | null }) {
+function PollView({
+  poll: initialPoll,
+  threadId,
+  myInfo,
+}: {
+  poll: PollData;
+  threadId: string;
+  myInfo: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null;
+}) {
   const utils = trpc.useUtils();
   const [poll, setPoll] = useState(initialPoll);
   const [newOptionText, setNewOptionText] = useState("");
   const [showAddOption, setShowAddOption] = useState(false);
 
   // Sync local state when server data updates (after invalidation)
-  useEffect(() => { setPoll(initialPoll); }, [initialPoll]);
+  useEffect(() => {
+    setPoll(initialPoll);
+  }, [initialPoll]);
 
   const vote = trpc.polls.vote.useMutation({
     onMutate: ({ pollOptionId }) => {
@@ -84,21 +106,32 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
       setPoll((p) => ({
         ...p,
         options: p.options.map((o) =>
-          o.id !== pollOptionId ? o : {
-            ...o,
-            user_voted: !o.user_voted,
-            vote_count: o.user_voted ? o.vote_count - 1 : o.vote_count + 1,
-            voters: o.user_voted
-              ? o.voters.filter((v) => v.id !== myInfo?.id)
-              : myInfo
-              ? [...o.voters, { id: myInfo.id, display_name: myInfo.display_name, avatar_url: myInfo.avatar_url }]
-              : o.voters,
-          }
+          o.id !== pollOptionId
+            ? o
+            : {
+                ...o,
+                user_voted: !o.user_voted,
+                vote_count: o.user_voted ? o.vote_count - 1 : o.vote_count + 1,
+                voters: o.user_voted
+                  ? o.voters.filter((v) => v.id !== myInfo?.id)
+                  : myInfo
+                    ? [
+                        ...o.voters,
+                        {
+                          id: myInfo.id,
+                          display_name: myInfo.display_name,
+                          avatar_url: myInfo.avatar_url,
+                        },
+                      ]
+                    : o.voters,
+              },
         ),
       }));
       return { prev };
     },
-    onError: (_, __, ctx) => { if (ctx?.prev) setPoll(ctx.prev); },
+    onError: (_, __, ctx) => {
+      if (ctx?.prev) setPoll(ctx.prev);
+    },
     onSuccess: () => utils.messages.list.invalidate({ threadId }),
   });
 
@@ -113,12 +146,19 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
   const totalVotes = poll.options.reduce((s, o) => s + o.vote_count, 0);
 
   return (
-    <div className="mt-1 border border-border bg-surface p-4 max-w-sm shadow-lg">
-      <p className="font-mono text-[12px] font-semibold text-ink mb-1">{poll.question}</p>
-      <p className="font-mono text-[10px] text-muted mb-3">{totalVotes} total vote{totalVotes !== 1 ? "s" : ""}</p>
+    <div className="mt-1 border border-border bg-surface p-4 max-w-full shadow-lg">
+      <p className="font-mono text-[12px] font-semibold text-ink mb-1">
+        {poll.question}
+      </p>
+      <p className="font-mono text-[10px] text-muted mb-3">
+        {totalVotes} total vote{totalVotes !== 1 ? "s" : ""}
+      </p>
       <div className="space-y-3">
         {poll.options.map((opt) => {
-          const pct = totalVotes > 0 ? Math.round((opt.vote_count / totalVotes) * 100) : 0;
+          const pct =
+            totalVotes > 0
+              ? Math.round((opt.vote_count / totalVotes) * 100)
+              : 0;
           return (
             <div key={opt.id}>
               <button
@@ -126,33 +166,56 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
                 onClick={() => vote.mutate({ pollOptionId: opt.id })}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`font-mono text-[12px] ${opt.user_voted ? "text-ink font-semibold" : "text-ink"}`}>{opt.text}</span>
-                  <span className="font-mono text-[10px] text-muted ml-2 flex-shrink-0">{opt.vote_count} ({pct}%)</span>
+                  <span
+                    className={`font-mono text-[12px] ${opt.user_voted ? "text-ink font-semibold" : "text-ink"}`}
+                  >
+                    {opt.text}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted ml-2 flex-shrink-0">
+                    {opt.vote_count} ({pct}%)
+                  </span>
                 </div>
                 <div className="h-1 bg-surface-2 border border-border mb-1.5">
-                  <div className={`h-full ${opt.user_voted ? "bg-pastel" : "bg-pastel/60"}`} style={{ width: `${pct}%` }} />
+                  <div
+                    className={`h-full ${opt.user_voted ? "bg-pastel" : "bg-pastel/60"}`}
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
               </button>
               {opt.voters.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {opt.voters.map((v) => (
-                    <div key={v.id} className="flex items-center gap-1 border border-border px-1.5 py-0.5">
+                    <div
+                      key={v.id}
+                      className="flex items-center gap-1 border border-border px-1.5 py-0.5"
+                    >
                       <div
-                        className="w-4 h-4 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[7px] font-semibold"
-                        style={{ background: "hsl(180 30% 92%)", color: "hsl(180 40% 28%)" }}
+                        className="w-5 h-5 flex-shrink-0 overflow-hidden flex items-center justify-center font-mono text-[8px] font-semibold"
+                        style={{
+                          background: "hsl(180 30% 92%)",
+                          color: "hsl(180 40% 28%)",
+                        }}
                       >
                         {v.avatar_url ? (
-                          <img src={v.avatar_url} alt={v.display_name} className="w-full h-full object-cover" />
+                          <img
+                            src={v.avatar_url}
+                            alt={v.display_name}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           v.display_name.slice(0, 1).toUpperCase()
                         )}
                       </div>
-                      <span className="font-mono text-[10px] text-ink">{v.display_name}</span>
+                      <span className="font-mono text-[10px] text-ink">
+                        {v.display_name}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="font-mono text-[10px] text-muted-2">No votes yet</span>
+                <span className="font-mono text-[10px] text-muted-2">
+                  No votes yet
+                </span>
               )}
             </div>
           );
@@ -184,7 +247,10 @@ function PollView({ poll: initialPoll, threadId, myInfo }: { poll: PollData; thr
           </button>
           <button
             type="button"
-            onClick={() => { setShowAddOption(false); setNewOptionText(""); }}
+            onClick={() => {
+              setShowAddOption(false);
+              setNewOptionText("");
+            }}
             className="font-mono text-[10px] text-muted hover:text-ink px-1"
           >
             ×
@@ -236,10 +302,14 @@ function PollCreateModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/20"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="bg-surface border border-border w-full max-w-md mx-0 sm:mx-4 p-5 sm:p-6">
-        <h2 className="font-mono text-sm font-semibold text-ink mb-4">Create poll</h2>
+      <div className="bg-surface border border-border w-full max-w-[calc(100vw-16px)] sm:max-w-md mx-2 sm:mx-4 p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="font-mono text-sm font-semibold text-ink mb-4">
+          Create poll
+        </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-1.5">
@@ -251,12 +321,15 @@ function PollCreateModal({
               onChange={(e) => setQuestion(e.target.value)}
               maxLength={500}
               placeholder="What do you want to ask?"
-              className="w-full border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-border bg-surface-2 px-3 py-2 text-base md:text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
             />
           </div>
           <div>
             <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-1.5">
-              Options <span className="normal-case text-muted-2">(optional — anyone can add more later)</span>
+              Options{" "}
+              <span className="normal-case text-muted-2">
+                (optional — anyone can add more later)
+              </span>
             </label>
             <div className="space-y-1.5">
               {options.map((opt, i) => (
@@ -266,7 +339,7 @@ function PollCreateModal({
                     onChange={(e) => setOption(i, e.target.value)}
                     maxLength={200}
                     placeholder={`Option ${i + 1}`}
-                    className="flex-1 border border-border bg-surface-2 px-3 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
+                    className="flex-1 border border-border bg-surface-2 px-3 py-1.5 text-base md:text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink transition-colors"
                   />
                   {options.length > 1 && (
                     <button
@@ -335,12 +408,16 @@ function formatDate(dateStr: string): string {
 function renderBody(
   body: string,
   members: { id: string; display_name: string }[],
-  myId: string
+  myId: string,
 ): React.ReactNode {
   if (!members.length || !body) return body;
 
-  const sorted = [...members].sort((a, b) => b.display_name.length - a.display_name.length);
-  const escaped = sorted.map((m) => m.display_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const sorted = [...members].sort(
+    (a, b) => b.display_name.length - a.display_name.length,
+  );
+  const escaped = sorted.map((m) =>
+    m.display_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
   const regex = new RegExp(`@(${escaped.join("|")})`, "g");
 
   const parts: React.ReactNode[] = [];
@@ -363,7 +440,7 @@ function renderBody(
         }`}
       >
         @{match[1]}
-      </span>
+      </span>,
     );
     lastIndex = match.index + match[0].length;
   }
@@ -428,7 +505,7 @@ function AttachmentModal({
           </span>
           <button
             onClick={onClose}
-            className="font-mono text-xl leading-none text-muted hover:text-ink transition-colors"
+            className="font-mono text-xl leading-none text-muted hover:text-ink transition-colors w-10 h-10 flex items-center justify-center flex-shrink-0"
           >
             ×
           </button>
@@ -461,8 +538,14 @@ function AttachmentModal({
                   <circle cx="6" cy="18" r="3" />
                   <circle cx="18" cy="16" r="3" />
                 </svg>
-                <span className="font-mono text-sm text-muted">{attachment.name}</span>
-                <audio controls src={attachment.url} className="w-full max-w-sm" />
+                <span className="font-mono text-sm text-muted">
+                  {attachment.name}
+                </span>
+                <audio
+                  controls
+                  src={attachment.url}
+                  className="w-full max-w-sm"
+                />
               </div>
             )}
           </div>
@@ -474,7 +557,9 @@ function AttachmentModal({
             {sentToThread ? (
               <p className="font-mono text-sm text-ink">Sent!</p>
             ) : otherThreads.length === 0 ? (
-              <p className="text-xs text-muted">No other threads in this group.</p>
+              <p className="text-xs text-muted">
+                No other threads in this group.
+              </p>
             ) : (
               <div className="space-y-1">
                 {otherThreads.map((thread) => (
@@ -548,8 +633,7 @@ function Avatar({
     .join("")
     .toUpperCase();
 
-  const hue =
-    name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+  const hue = name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
 
   if (avatarUrl && !imgError) {
     return (
@@ -590,7 +674,13 @@ function ImageGallery({
   const [expanded, setExpanded] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef<{ mx: number; my: number; ox: number; minX: number; maxX: number } | null>(null);
+  const dragStart = useRef<{
+    mx: number;
+    my: number;
+    ox: number;
+    minX: number;
+    maxX: number;
+  } | null>(null);
   const hasDraggedRef = useRef(false);
   const justExpandedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -621,7 +711,10 @@ function ImageGallery({
       if (!dragStart.current) return;
       const dx = e.clientX - dragStart.current.mx;
       if (Math.abs(dx) > 3) hasDraggedRef.current = true;
-      const newX = Math.min(dragStart.current.maxX, Math.max(dragStart.current.minX, dragStart.current.ox + dx));
+      const newX = Math.min(
+        dragStart.current.maxX,
+        Math.max(dragStart.current.minX, dragStart.current.ox + dx),
+      );
       setOffset({ x: newX, y: 0 });
     }
 
@@ -630,8 +723,11 @@ function ImageGallery({
       dragStart.current = null;
       if (containerRef.current) {
         const r = containerRef.current.getBoundingClientRect();
-        const inside = e.clientX >= r.left && e.clientX <= r.right
-                    && e.clientY >= r.top  && e.clientY <= r.bottom;
+        const inside =
+          e.clientX >= r.left &&
+          e.clientX <= r.right &&
+          e.clientY >= r.top &&
+          e.clientY <= r.bottom;
         if (!inside) setExpanded(false);
       }
     }
@@ -647,7 +743,8 @@ function ImageGallery({
   function startDrag(clientX: number, clientY: number) {
     hasDraggedRef.current = false;
 
-    let minX = 0; const maxX = 0;
+    let minX = 0;
+    const maxX = 0;
     const parent = containerRef.current?.parentElement;
     if (parent) {
       const expandedWidth = 130 * n + 10 * (n - 1);
@@ -670,8 +767,13 @@ function ImageGallery({
         zIndex: isDragging ? 10 : undefined,
       }}
       onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => { if (!isDragging) setExpanded(false); }}
-      onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
+      onMouseLeave={() => {
+        if (!isDragging) setExpanded(false);
+      }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        startDrag(e.clientX, e.clientY);
+      }}
       onTouchStart={(e) => {
         if (!expanded) {
           setExpanded(true);
@@ -685,10 +787,16 @@ function ImageGallery({
         const t = e.touches[0];
         const dx = t.clientX - dragStart.current.mx;
         if (Math.abs(dx) > 3) hasDraggedRef.current = true;
-        const newX = Math.min(dragStart.current.maxX, Math.max(dragStart.current.minX, dragStart.current.ox + dx));
+        const newX = Math.min(
+          dragStart.current.maxX,
+          Math.max(dragStart.current.minX, dragStart.current.ox + dx),
+        );
         setOffset({ x: newX, y: 0 });
       }}
-      onTouchEnd={() => { setIsDragging(false); dragStart.current = null; }}
+      onTouchEnd={() => {
+        setIsDragging(false);
+        dragStart.current = null;
+      }}
     >
       {attachments.map((att, i) => {
         const dir = i % 2 === 0 ? 1 : -1;
@@ -700,7 +808,10 @@ function ImageGallery({
             key={i}
             onClick={() => {
               if (hasDraggedRef.current) return;
-              if (justExpandedRef.current) { justExpandedRef.current = false; return; }
+              if (justExpandedRef.current) {
+                justExpandedRef.current = false;
+                return;
+              }
               if (expanded) onOpen(att);
               else setExpanded(true);
             }}
@@ -714,7 +825,7 @@ function ImageGallery({
                 : "0 4px 14px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.08)",
               rotate: `${expanded ? expandedRot : stackedRot}deg`,
               width: "130px",
-              marginLeft: i === 0 ? 0 : (expanded ? "10px" : "-92px"),
+              marginLeft: i === 0 ? 0 : expanded ? "10px" : "-92px",
               zIndex: expanded ? "auto" : n - i,
               transition: isDragging
                 ? "box-shadow 200ms ease"
@@ -732,7 +843,11 @@ function ImageGallery({
             />
             <span
               className="font-mono text-[9px] text-center truncate block mt-1.5"
-              style={{ color: "#888", opacity: expanded ? 1 : 0, transition: "opacity 200ms ease" }}
+              style={{
+                color: "#888",
+                opacity: expanded ? 1 : 0,
+                transition: "opacity 200ms ease",
+              }}
             >
               {att.name}
             </span>
@@ -759,7 +874,9 @@ function StatusControl({
   currentStatus: ThreadStatus;
   threadTitle: string;
 }) {
-  const [optimisticStatus, setOptimisticStatus] = useState<ThreadStatus | null>(null);
+  const [optimisticStatus, setOptimisticStatus] = useState<ThreadStatus | null>(
+    null,
+  );
   const [confirmReopen, setConfirmReopen] = useState<ThreadStatus | null>(null);
   const displayStatus = optimisticStatus ?? currentStatus;
 
@@ -809,7 +926,9 @@ function StatusControl({
   if (confirmReopen) {
     return (
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] text-muted uppercase tracking-wider">reopen {threadTitle}?</span>
+        <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
+          reopen {threadTitle}?
+        </span>
         <button
           onClick={() => confirmReopenTo(confirmReopen)}
           className="font-mono text-[10px] uppercase tracking-wider px-2 py-[3px] border border-border text-ink hover:bg-border/40 transition-colors"
@@ -842,7 +961,7 @@ function StatusControl({
             key={s}
             onClick={() => handleClick(s)}
             disabled={updateStatus.isPending}
-            className={`relative z-10 flex-1 min-w-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-[5px] transition-colors duration-200 border-r last:border-r-0 border-border disabled:opacity-40 ${
+            className={`relative z-10 flex-1 min-w-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-2.5 md:py-[5px] transition-colors duration-200 border-r last:border-r-0 border-border disabled:opacity-40 ${
               active ? "" : "text-muted hover:text-ink"
             }`}
             style={active ? { color: activeStyle(s).color } : undefined}
@@ -872,7 +991,11 @@ export function ThreadDetail({
   const initialDelays = useRef<Map<string, number>>(new Map());
   const [body, setBody] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [myInfo, setMyInfo] = useState<{ id: string; display_name: string; avatar_url: string | null } | null>(null);
+  const [myInfo, setMyInfo] = useState<{
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null>(null);
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>(initialStatus);
@@ -899,7 +1022,11 @@ export function ThreadDetail({
   const { markRead } = useUnread();
 
   // Reply state
-  const [replyingTo, setReplyingTo] = useState<{ id: string; body: string; authorName: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{
+    id: string;
+    body: string;
+    authorName: string;
+  } | null>(null);
 
   // Edit state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -924,7 +1051,8 @@ export function ThreadDetail({
         ...prev,
         {
           ...(msg as unknown as Message),
-          poll_id: (msg as unknown as { poll_id: string | null }).poll_id ?? null,
+          poll_id:
+            (msg as unknown as { poll_id: string | null }).poll_id ?? null,
           poll: null,
           reactions: [
             { type: "👍", count: 0, userReacted: false, users: [] },
@@ -969,7 +1097,7 @@ export function ThreadDetail({
               };
             }),
           };
-        })
+        }),
       );
     },
     onError: () => {
@@ -980,7 +1108,7 @@ export function ThreadDetail({
   const deleteMessage = trpc.messages.deleteMessage.useMutation({
     onMutate: ({ messageId }) => {
       setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, is_deleted: true } : m))
+        prev.map((m) => (m.id === messageId ? { ...m, is_deleted: true } : m)),
       );
     },
     onError: () => {
@@ -992,8 +1120,10 @@ export function ThreadDetail({
     onSuccess: (updated) => {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === updated.id ? { ...m, body: updated.body, edited_at: updated.edited_at } : m
-        )
+          m.id === updated.id
+            ? { ...m, body: updated.body, edited_at: updated.edited_at }
+            : m,
+        ),
       );
       setEditingMessageId(null);
       setEditBody("");
@@ -1002,19 +1132,21 @@ export function ThreadDetail({
 
   const { data: workspaceMembers } = trpc.messages.groupMembers.useQuery(
     { groupId },
-    { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
+    { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 },
   );
 
   const mentionSuggestions = useMemo(() => {
     if (mentionQuery === null || !workspaceMembers) return [];
     if (mentionQuery === "") return workspaceMembers;
     const q = mentionQuery.toLowerCase();
-    return workspaceMembers.filter((m) => m.display_name.toLowerCase().includes(q));
+    return workspaceMembers.filter((m) =>
+      m.display_name.toLowerCase().includes(q),
+    );
   }, [mentionQuery, workspaceMembers]);
 
   const { data: loadedMessages, isLoading } = trpc.messages.list.useQuery(
     { threadId },
-    { refetchOnWindowFocus: false }
+    { refetchOnWindowFocus: false },
   );
 
   useEffect(() => {
@@ -1024,7 +1156,7 @@ export function ThreadDetail({
         hasMore: boolean;
       };
       initialDelays.current = new Map(
-        msgs.map((m, i) => [m.id, Math.min(i * 30, 600)])
+        msgs.map((m, i) => [m.id, Math.min(i * 30, 600)]),
       );
       setMessages(msgs);
       setHasMore(more);
@@ -1046,7 +1178,9 @@ export function ThreadDetail({
     }
 
     if (isInitialLoad.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+      bottomRef.current?.scrollIntoView({
+        behavior: "instant" as ScrollBehavior,
+      });
       isInitialLoad.current = false;
       prevMsgCountRef.current = count;
       return;
@@ -1075,7 +1209,12 @@ export function ThreadDetail({
         .select("display_name, avatar_url")
         .eq("id", user.id)
         .single();
-      if (profile) setMyInfo({ id: user.id, display_name: profile.display_name, avatar_url: profile.avatar_url ?? null });
+      if (profile)
+        setMyInfo({
+          id: user.id,
+          display_name: profile.display_name,
+          avatar_url: profile.avatar_url ?? null,
+        });
     });
   }, []);
 
@@ -1089,15 +1228,30 @@ export function ThreadDetail({
 
     channel
       .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ display_name: string; typing: boolean }>();
+        const state = channel.presenceState<{
+          display_name: string;
+          typing: boolean;
+        }>();
         const names = Object.entries(state)
-          .filter(([uid, presences]) => uid !== myInfo.id && (presences as { display_name: string; typing: boolean }[])[0]?.typing)
-          .map(([, presences]) => (presences as { display_name: string; typing: boolean }[])[0].display_name);
+          .filter(
+            ([uid, presences]) =>
+              uid !== myInfo.id &&
+              (presences as { display_name: string; typing: boolean }[])[0]
+                ?.typing,
+          )
+          .map(
+            ([, presences]) =>
+              (presences as { display_name: string; typing: boolean }[])[0]
+                .display_name,
+          );
         setTypingUsers(names);
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({ display_name: myInfo.display_name, typing: false });
+          await channel.track({
+            display_name: myInfo.display_name,
+            typing: false,
+          });
         }
       });
 
@@ -1147,10 +1301,18 @@ export function ThreadDetail({
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [
               ...prev,
-              { ...newMsg, is_deleted: newMsg.is_deleted ?? false, poll_id: newMsg.poll_id ?? null, poll: null, profiles: profile ?? null, reactions: REACTION_DEFAULTS, reply_to: null },
+              {
+                ...newMsg,
+                is_deleted: newMsg.is_deleted ?? false,
+                poll_id: newMsg.poll_id ?? null,
+                poll: null,
+                profiles: profile ?? null,
+                reactions: REACTION_DEFAULTS,
+                reply_to: null,
+              },
             ];
           });
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -1161,15 +1323,25 @@ export function ThreadDetail({
           filter: `thread_id=eq.${threadId}`,
         },
         (payload) => {
-          const updated = payload.new as { id: string; body: string; edited_at: string | null; is_deleted: boolean };
+          const updated = payload.new as {
+            id: string;
+            body: string;
+            edited_at: string | null;
+            is_deleted: boolean;
+          };
           setMessages((prev) =>
             prev.map((m) =>
               m.id === updated.id
-                ? { ...m, body: updated.body, edited_at: updated.edited_at ?? null, is_deleted: updated.is_deleted ?? false }
-                : m
-            )
+                ? {
+                    ...m,
+                    body: updated.body,
+                    edited_at: updated.edited_at ?? null,
+                    is_deleted: updated.is_deleted ?? false,
+                  }
+                : m,
+            ),
           );
-        }
+        },
       )
       .subscribe();
 
@@ -1195,7 +1367,7 @@ export function ThreadDetail({
           const updated = payload.new as { status: ThreadStatus };
           setThreadStatus(updated.status);
           utils.threads.list.invalidate({ groupId });
-        }
+        },
       )
       .subscribe();
 
@@ -1264,14 +1436,17 @@ export function ThreadDetail({
           type: file.type.startsWith("image/") ? "image" : ("audio" as const),
           name: raw.name,
         };
-      })
+      }),
     );
   }
 
   function stopTyping() {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     if (presenceChannelRef.current && myInfo) {
-      presenceChannelRef.current.track({ display_name: myInfo.display_name, typing: false });
+      presenceChannelRef.current.track({
+        display_name: myInfo.display_name,
+        typing: false,
+      });
     }
   }
 
@@ -1279,7 +1454,8 @@ export function ThreadDetail({
     const cursor = textareaRef.current?.selectionStart ?? body.length;
     const textBeforeCursor = body.slice(0, cursor);
     const lastAtIdx = textBeforeCursor.lastIndexOf("@");
-    const newBody = body.slice(0, lastAtIdx) + "@" + name + " " + body.slice(cursor);
+    const newBody =
+      body.slice(0, lastAtIdx) + "@" + name + " " + body.slice(cursor);
     setBody(newBody);
     setMentionQuery(null);
     setTimeout(() => {
@@ -1301,7 +1477,11 @@ export function ThreadDetail({
     const lastAtIdx = textBeforeCursor.lastIndexOf("@");
     if (lastAtIdx >= 0) {
       const partial = textBeforeCursor.slice(lastAtIdx + 1);
-      if (partial.length <= 40 && !partial.includes("\n") && !partial.includes("@")) {
+      if (
+        partial.length <= 40 &&
+        !partial.includes("\n") &&
+        !partial.includes("@")
+      ) {
         setMentionQuery(partial);
         setMentionIndex(0);
       } else {
@@ -1312,14 +1492,21 @@ export function ThreadDetail({
     }
 
     if (presenceChannelRef.current && myInfo) {
-      presenceChannelRef.current.track({ display_name: myInfo.display_name, typing: true });
+      presenceChannelRef.current.track({
+        display_name: myInfo.display_name,
+        typing: true,
+      });
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(stopTyping, 3000);
     }
   }
 
   async function handleSend() {
-    if ((!body.trim() && pendingFiles.length === 0) || sendMessage.isPending || uploading)
+    if (
+      (!body.trim() && pendingFiles.length === 0) ||
+      sendMessage.isPending ||
+      uploading
+    )
       return;
 
     stopTyping();
@@ -1407,6 +1594,24 @@ export function ThreadDetail({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const dropped = Array.from(e.dataTransfer.files);
+    const errors: string[] = [];
+    const valid: File[] = [];
+    for (const file of dropped) {
+      const err = validateFile(file);
+      if (err) errors.push(`${err.file}: ${err.reason}`);
+      else valid.push(file);
+    }
+    if (errors.length > 0) showError(errors.join("\n"));
+    if (valid.length > 0) setPendingFiles((prev) => [...prev, ...valid]);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+
   const messagesByDate = useMemo(() => {
     const groups: Array<{ date: string; messages: Message[] }> = [];
     for (const msg of messages) {
@@ -1422,21 +1627,40 @@ export function ThreadDetail({
   }, [messages]);
 
   const isDone = threadStatus === "DONE";
-  const canSend = !isDone && (body.trim() || pendingFiles.length > 0) && !sendMessage.isPending && !uploading;
+  const canSend =
+    !isDone &&
+    (body.trim() || pendingFiles.length > 0) &&
+    !sendMessage.isPending &&
+    !uploading;
 
   const members = workspaceMembers ?? [];
 
   const trashIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" /><path d="M14 11v6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
     </svg>
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0 bg-surface">
+    <div
+      className="flex-1 flex flex-col h-full min-w-0 bg-surface"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
       {/* Thread header */}
       <header className="border-b border-border flex-shrink-0">
         <div className="px-3 md:px-6 flex items-center gap-2 md:gap-4 h-12 md:h-auto md:py-[14px]">
@@ -1445,32 +1669,59 @@ export function ThreadDetail({
             className="md:hidden w-11 h-full flex items-center justify-center -ml-1 flex-shrink-0 text-muted hover:text-ink transition-colors"
             aria-label="Back to threads"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
 
           <div className="flex-1 min-w-0">
-            <h1 className="font-mono text-sm font-semibold text-ink truncate">
-              <span className="text-muted-2"># </span>
+            <h1 className="font-mono text-sm font-semibold text-ink truncate lowercase">
+              <span className="text-muted-2 normal-case"># </span>
               {initialTitle}
             </h1>
           </div>
 
           <div className="hidden md:flex items-center gap-3 flex-shrink-0">
-            <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
+            <StatusControl
+              threadId={threadId}
+              currentStatus={threadStatus}
+              threadTitle={initialTitle}
+            />
             {confirmDelete ? (
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] text-red-600 uppercase tracking-wider">Delete?</span>
-                <button onClick={() => deleteThread.mutate({ threadId })} disabled={deleteThread.isPending} className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 bg-red-600 text-white disabled:opacity-40">
+                <span className="font-mono text-[10px] text-red-600 uppercase tracking-wider">
+                  Delete?
+                </span>
+                <button
+                  onClick={() => deleteThread.mutate({ threadId })}
+                  disabled={deleteThread.isPending}
+                  className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 bg-red-600 text-white disabled:opacity-40"
+                >
                   {deleteThread.isPending ? "..." : "Confirm"}
                 </button>
-                <button onClick={() => setConfirmDelete(false)} className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 text-muted hover:text-ink transition-colors">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 text-muted hover:text-ink transition-colors"
+                >
                   Cancel
                 </button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)} title="Delete thread" className="text-muted hover:text-red-600 transition-colors">
+              <button
+                onClick={() => setConfirmDelete(true)}
+                title="Delete thread"
+                className="text-muted hover:text-red-600 transition-colors"
+              >
                 {trashIcon}
               </button>
             )}
@@ -1478,14 +1729,29 @@ export function ThreadDetail({
 
           {confirmDelete ? (
             <div className="md:hidden flex items-center gap-1.5 flex-shrink-0">
-              <span className="font-mono text-[10px] text-red-600 uppercase">delete?</span>
-              <button onClick={() => deleteThread.mutate({ threadId })} disabled={deleteThread.isPending} className="font-mono text-[10px] uppercase px-2 py-1 bg-red-600 text-white disabled:opacity-40">
+              <span className="font-mono text-[10px] text-red-600 uppercase">
+                delete?
+              </span>
+              <button
+                onClick={() => deleteThread.mutate({ threadId })}
+                disabled={deleteThread.isPending}
+                className="font-mono text-[10px] uppercase px-2 py-1 bg-red-600 text-white disabled:opacity-40"
+              >
                 {deleteThread.isPending ? "..." : "yes"}
               </button>
-              <button onClick={() => setConfirmDelete(false)} className="font-mono text-[10px] uppercase px-2 py-1 text-muted">no</button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="font-mono text-[10px] uppercase px-2 py-1 text-muted"
+              >
+                no
+              </button>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} title="Delete thread" className="md:hidden w-11 h-full flex items-center justify-center flex-shrink-0 text-muted hover:text-red-600 transition-colors">
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Delete thread"
+              className="md:hidden w-11 h-full flex items-center justify-center flex-shrink-0 text-muted hover:text-red-600 transition-colors"
+            >
               {trashIcon}
             </button>
           )}
@@ -1493,13 +1759,20 @@ export function ThreadDetail({
 
         {!confirmDelete && (
           <div className="md:hidden px-3 pb-2">
-            <StatusControl threadId={threadId} currentStatus={threadStatus} threadTitle={initialTitle} />
+            <StatusControl
+              threadId={threadId}
+              currentStatus={threadStatus}
+              threadTitle={initialTitle}
+            />
           </div>
         )}
       </header>
 
       {/* Messages */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-3 md:py-4">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 md:px-6 py-3 md:py-4"
+      >
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -1533,317 +1806,419 @@ export function ThreadDetail({
             )}
             {messagesByDate.map(({ date, messages: dayMessages }) => {
               return (
-            <div key={date}>
-              <div className="flex items-center gap-3 my-4">
-                <div className="flex-1 h-px bg-border" />
-                <span className="font-mono text-[10px] text-muted uppercase tracking-[0.14em]">
-                  {date}
-                </span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
+                <div key={date}>
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="font-mono text-[10px] text-muted uppercase tracking-[0.14em]">
+                      {date}
+                    </span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
 
-              {dayMessages.map((msg, idx) => {
-                const prevMsg = idx > 0 ? dayMessages[idx - 1] : null;
-                const isSameAuthor =
-                  prevMsg?.user_id === msg.user_id &&
-                  new Date(msg.created_at).getTime() -
-                    new Date(prevMsg.created_at).getTime() <
-                    5 * 60_000;
-                const name = msg.profiles?.display_name ?? "Unknown";
-                const isOwnMessage = msg.user_id === myInfo?.id;
-                const isEditing = editingMessageId === msg.id;
+                  {dayMessages.map((msg, idx) => {
+                    const prevMsg = idx > 0 ? dayMessages[idx - 1] : null;
+                    const isSameAuthor =
+                      prevMsg?.user_id === msg.user_id &&
+                      new Date(msg.created_at).getTime() -
+                        new Date(prevMsg.created_at).getTime() <
+                        5 * 60_000;
+                    const name = msg.profiles?.display_name ?? "Unknown";
+                    const isOwnMessage = msg.user_id === myInfo?.id;
+                    const isEditing = editingMessageId === msg.id;
 
-                return (
-                  <div
-                    key={msg.id}
-                    id={`message-${msg.id}`}
-                    className="flex gap-3 group rounded-sm px-2 -mx-2"
-                    style={{
-                      marginTop: isSameAuthor ? 2 : 14,
-                      animation: msg.id === highlightMessageId
-                        ? "fadeUp 360ms ease-out both, messageHighlight 2.4s 400ms ease-out forwards"
-                        : "fadeUp 360ms ease-out both",
-                      animationDelay: `${initialDelays.current.get(msg.id) ?? 0}ms`,
-                    }}
-                    onMouseEnter={(e) => {
-                      const actions = e.currentTarget.querySelector<HTMLElement>(".msg-actions");
-                      if (actions) actions.style.opacity = "1";
-                    }}
-                    onMouseLeave={(e) => {
-                      const actions = e.currentTarget.querySelector<HTMLElement>(".msg-actions");
-                      if (actions) actions.style.opacity = "0";
-                    }}
-                  >
-                    {/* Avatar column */}
-                    <div className="w-7 flex-shrink-0">
-                      {!isSameAuthor && (
-                        <Avatar
-                          name={name}
-                          avatarUrl={msg.profiles?.avatar_url}
-                        />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {!isSameAuthor && (
-                        <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className="text-[13px] font-semibold text-ink">
-                            {name}
-                          </span>
-                          <span className="font-mono text-[10px] text-muted">
-                            {formatTime(msg.created_at)}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="relative">
-                        {/* Reply quote */}
-                        {msg.reply_to && !msg.is_deleted && (
-                          <button
-                            className="flex items-start gap-1.5 mb-1 border-l-2 border-border pl-2 text-left w-full hover:border-ink/40 transition-colors group/reply"
-                            onClick={() => {
-                              const el = document.getElementById(`message-${msg.reply_to!.id}`);
-                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                            }}
-                          >
-                            <div className="min-w-0">
-                              <span className="font-mono text-[10px] text-muted font-semibold">
-                                {msg.reply_to.author_name}
-                              </span>
-                              <p className="text-[12px] text-muted truncate leading-snug">
-                                {msg.reply_to.body}
-                              </p>
-                            </div>
-                          </button>
-                        )}
-
-                        {/* Deleted message tombstone */}
-                        {msg.is_deleted ? (
-                          <p className="text-[13px] text-muted italic font-mono">
-                            message deleted
-                          </p>
-                        ) : isEditing ? (
-                          <div className="mt-0.5">
-                            <textarea
-                              value={editBody}
-                              onChange={(e) => setEditBody(e.target.value)}
-                              className="w-full border border-pastel-deep bg-surface-2 px-2.5 py-2 font-sans text-[13.5px] leading-[1.55] text-ink resize-none outline-none focus:ring-0"
-                              style={{ boxShadow: "0 0 0 3px var(--pastel-tint)" }}
-                              rows={Math.max(2, editBody.split("\n").length)}
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                  setEditingMessageId(null);
-                                  setEditBody("");
-                                }
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleEditSubmit(msg.id);
-                                }
-                              }}
+                    return (
+                      <div
+                        key={msg.id}
+                        id={`message-${msg.id}`}
+                        className="flex gap-3 group rounded-sm px-2 -mx-2"
+                        style={{
+                          marginTop: isSameAuthor ? 2 : 14,
+                          animation:
+                            msg.id === highlightMessageId
+                              ? "fadeUp 360ms ease-out both, messageHighlight 2.4s 400ms ease-out forwards"
+                              : "fadeUp 360ms ease-out both",
+                          animationDelay: `${initialDelays.current.get(msg.id) ?? 0}ms`,
+                        }}
+                        onMouseEnter={(e) => {
+                          const actions =
+                            e.currentTarget.querySelector<HTMLElement>(
+                              ".msg-actions",
+                            );
+                          if (actions) actions.style.opacity = "1";
+                        }}
+                        onMouseLeave={(e) => {
+                          const actions =
+                            e.currentTarget.querySelector<HTMLElement>(
+                              ".msg-actions",
+                            );
+                          if (actions) actions.style.opacity = "0";
+                        }}
+                      >
+                        {/* Avatar column */}
+                        <div className="w-7 flex-shrink-0">
+                          {!isSameAuthor && (
+                            <Avatar
+                              name={name}
+                              avatarUrl={msg.profiles?.avatar_url}
                             />
-                            <div className="flex items-center gap-2 mt-1">
-                              <button
-                                onClick={() => handleEditSubmit(msg.id)}
-                                disabled={editMessage.isPending || !editBody.trim()}
-                                className="font-mono text-[10px] uppercase tracking-wider bg-ink text-surface px-2.5 py-1 hover:bg-ink/90 disabled:opacity-40 transition-colors"
-                              >
-                                {editMessage.isPending ? "…" : "save"}
-                              </button>
-                              <button
-                                onClick={() => { setEditingMessageId(null); setEditBody(""); }}
-                                className="font-mono text-[10px] uppercase tracking-wider text-muted hover:text-ink transition-colors"
-                              >
-                                cancel
-                              </button>
-                              <span className="font-mono text-[10px] text-muted-2 ml-1">esc · ⏎ save</span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {!isSameAuthor && (
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className="text-[13px] font-semibold text-ink">
+                                {name}
+                              </span>
+                              <span className="font-mono text-[10px] text-muted">
+                                {formatTime(msg.created_at)}
+                              </span>
                             </div>
-                          </div>
-                        ) : (
-                          <>
-                            {msg.poll && (
-                              <PollView poll={msg.poll} threadId={threadId} myInfo={myInfo} />
+                          )}
+
+                          <div className="relative">
+                            {/* Reply quote */}
+                            {msg.reply_to && !msg.is_deleted && (
+                              <button
+                                className="flex items-start gap-1.5 mb-1 border-l-2 border-border pl-2 text-left w-full hover:border-ink/40 transition-colors group/reply"
+                                onClick={() => {
+                                  const el = document.getElementById(
+                                    `message-${msg.reply_to!.id}`,
+                                  );
+                                  if (el)
+                                    el.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "center",
+                                    });
+                                }}
+                              >
+                                <div className="min-w-0">
+                                  <span className="font-mono text-[10px] text-muted font-semibold">
+                                    {msg.reply_to.author_name}
+                                  </span>
+                                  <p className="text-[12px] text-muted truncate leading-snug">
+                                    {msg.reply_to.body}
+                                  </p>
+                                </div>
+                              </button>
                             )}
-                            {msg.body && (
-                              <p className="text-[13.5px] leading-[1.55] text-ink whitespace-pre-wrap break-words">
-                                {renderBody(msg.body, members, myInfo?.id ?? "")}
+
+                            {/* Deleted message tombstone */}
+                            {msg.is_deleted ? (
+                              <p className="text-[13px] text-muted italic font-mono">
+                                message deleted
                               </p>
-                            )}
-                            {msg.edited_at && (
-                              <span className="font-mono text-[10px] text-muted-2 ml-0.5">(edited)</span>
-                            )}
-                          </>
-                        )}
-
-                        {/* Hover action bar */}
-                        {!isEditing && !msg.is_deleted && (
-                          <div
-                            className="msg-actions absolute -top-[14px] right-0 flex gap-0.5 bg-surface-2 border border-border p-0.5"
-                            style={{ opacity: 0, transition: "opacity 160ms ease" }}
-                          >
-                            {/* Reply button */}
-                            <button
-                              onClick={() => {
-                                setReplyingTo({
-                                  id: msg.id,
-                                  body: msg.body,
-                                  authorName: name,
-                                });
-                                textareaRef.current?.focus();
-                              }}
-                              title="Reply"
-                              className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
-                            >
-                              ↩
-                            </button>
-
-                            {/* Edit + delete — own messages only */}
-                            {isOwnMessage && (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setEditingMessageId(msg.id);
-                                    setEditBody(msg.body);
+                            ) : isEditing ? (
+                              <div className="mt-0.5">
+                                <textarea
+                                  value={editBody}
+                                  onChange={(e) => setEditBody(e.target.value)}
+                                  className="w-full border border-pastel-deep bg-surface-2 px-2.5 py-2 font-sans text-[13.5px] leading-[1.55] text-ink resize-none outline-none focus:ring-0"
+                                  style={{
+                                    boxShadow: "0 0 0 3px var(--pastel-tint)",
                                   }}
-                                  title="Edit"
-                                  className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
-                                >
-                                  ✎
-                                </button>
-                                <button
-                                  onClick={() => deleteMessage.mutate({ messageId: msg.id })}
-                                  title="Delete"
-                                  className="px-1.5 py-0.5 text-[13px] text-muted hover:text-red-500 hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
-                                >
-                                  ×
-                                </button>
+                                  rows={Math.max(
+                                    2,
+                                    editBody.split("\n").length,
+                                  )}
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Escape") {
+                                      setEditingMessageId(null);
+                                      setEditBody("");
+                                    }
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleEditSubmit(msg.id);
+                                    }
+                                  }}
+                                />
+                                <div className="flex items-center gap-2 mt-1">
+                                  <button
+                                    onClick={() => handleEditSubmit(msg.id)}
+                                    disabled={
+                                      editMessage.isPending || !editBody.trim()
+                                    }
+                                    className="font-mono text-[10px] uppercase tracking-wider bg-ink text-surface px-2.5 py-1 hover:bg-ink/90 disabled:opacity-40 transition-colors"
+                                  >
+                                    {editMessage.isPending ? "…" : "save"}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingMessageId(null);
+                                      setEditBody("");
+                                    }}
+                                    className="font-mono text-[10px] uppercase tracking-wider text-muted hover:text-ink transition-colors"
+                                  >
+                                    cancel
+                                  </button>
+                                  <span className="font-mono text-[10px] text-muted-2 ml-1">
+                                    esc · ⏎ save
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {msg.poll && (
+                                  <PollView
+                                    poll={msg.poll}
+                                    threadId={threadId}
+                                    myInfo={myInfo}
+                                  />
+                                )}
+                                {msg.body && (
+                                  <p className="text-[13.5px] leading-[1.55] text-ink whitespace-pre-wrap break-words">
+                                    {renderBody(
+                                      msg.body,
+                                      members,
+                                      myInfo?.id ?? "",
+                                    )}
+                                  </p>
+                                )}
+                                {msg.edited_at && (
+                                  <span className="font-mono text-[10px] text-muted-2 ml-0.5">
+                                    (edited)
+                                  </span>
+                                )}
                               </>
                             )}
 
-                            {/* Reaction buttons */}
-                            {(["👍", "👎", "❓"] as const).map((emoji) => (
-                              <button
-                                key={emoji}
-                                onClick={() =>
-                                  toggleReaction.mutate({ messageId: msg.id, type: emoji })
-                                }
-                                className="px-1.5 py-0.5 text-sm hover:scale-125 transition-transform border-none bg-transparent cursor-pointer"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Attachments */}
-                      {!msg.is_deleted && (msg.attachments ?? []).length > 0 && (() => {
-                        const imgAtts = msg.attachments.filter((a) => a.type === "image");
-                        const audioAtts = msg.attachments.filter((a) => a.type === "audio");
-                        return (
-                          <div className="mt-2 space-y-2">
-                            {imgAtts.length === 1 && (
-                              <button
-                                onClick={() => setActiveLightbox(imgAtts[0])}
-                                className="text-left transition-all duration-150 hover:scale-[1.03]"
+                            {/* Hover action bar */}
+                            {!isEditing && !msg.is_deleted && (
+                              <div
+                                className="msg-actions select-none absolute -top-[14px] right-0 flex gap-0.5 bg-surface-2 border border-border p-0.5"
                                 style={{
-                                  background: "var(--background)",
-                                  padding: "8px 8px 28px 8px",
-                                  boxShadow: "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
-                                  rotate: `${(0 % 2 === 0 ? 1 : -1) * (1 + (0 % 3) * 0.5)}deg`,
-                                  width: "160px",
-                                  display: "block",
+                                  opacity: 0,
+                                  transition: "opacity 160ms ease",
                                 }}
                               >
-                                <img
-                                  src={imgAtts[0].url}
-                                  alt={imgAtts[0].name}
-                                  className="w-full object-cover"
-                                  style={{ aspectRatio: "1/1", display: "block" }}
-                                  loading="lazy"
-                                />
-                                <span className="font-mono text-[10px] text-center truncate block mt-2" style={{ color: "#888" }}>
-                                  {imgAtts[0].name}
-                                </span>
-                              </button>
-                            )}
-                            {imgAtts.length >= 2 && (
-                              <ImageGallery attachments={imgAtts} onOpen={setActiveLightbox} />
-                            )}
-                            {audioAtts.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {audioAtts.map((att, i) => (
+                                {/* Reply button */}
+                                <button
+                                  onClick={() => {
+                                    setReplyingTo({
+                                      id: msg.id,
+                                      body: msg.body,
+                                      authorName: name,
+                                    });
+                                    textareaRef.current?.focus();
+                                  }}
+                                  title="Reply"
+                                  className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
+                                >
+                                  ↩
+                                </button>
+
+                                {/* Edit + delete — own messages only */}
+                                {isOwnMessage && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setEditingMessageId(msg.id);
+                                        setEditBody(msg.body);
+                                      }}
+                                      title="Edit"
+                                      className="px-1.5 py-0.5 text-[13px] text-muted hover:text-ink hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
+                                    >
+                                      ✎
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        deleteMessage.mutate({
+                                          messageId: msg.id,
+                                        })
+                                      }
+                                      title="Delete"
+                                      className="px-1.5 py-0.5 text-[13px] text-muted hover:text-red-500 hover:scale-110 transition-all border-none bg-transparent cursor-pointer leading-none"
+                                    >
+                                      ×
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Reaction buttons */}
+                                {(["👍", "👎", "❓"] as const).map((emoji) => (
                                   <button
-                                    key={i}
-                                    onClick={() => setActiveLightbox(att)}
-                                    className="flex items-center gap-2 border border-border px-3 py-2 hover:border-pastel-deep transition-colors"
+                                    key={emoji}
+                                    onClick={() =>
+                                      toggleReaction.mutate({
+                                        messageId: msg.id,
+                                        type: emoji,
+                                      })
+                                    }
+                                    className="px-1.5 py-0.5 text-sm hover:scale-125 transition-transform border-none bg-transparent cursor-pointer"
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted flex-shrink-0">
-                                      <path d="M9 18V5l12-2v13" />
-                                      <circle cx="6" cy="18" r="3" />
-                                      <circle cx="18" cy="16" r="3" />
-                                    </svg>
-                                    <span className="font-mono text-xs text-ink max-w-[160px] truncate">{att.name}</span>
+                                    {emoji}
                                   </button>
                                 ))}
                               </div>
                             )}
                           </div>
-                        );
-                      })()}
 
-                      {/* Reaction chips */}
-                      {!msg.is_deleted && (msg.reactions ?? []).some((r) => r.count > 0) && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {msg.reactions
-                            .filter((r) => r.count > 0)
-                            .map((r) => {
-                              const tooltipKey = `${msg.id}:${r.type}`;
-                              const isTooltipVisible = activeTooltip === tooltipKey;
+                          {/* Attachments */}
+                          {!msg.is_deleted &&
+                            (msg.attachments ?? []).length > 0 &&
+                            (() => {
+                              const imgAtts = msg.attachments.filter(
+                                (a) => a.type === "image",
+                              );
+                              const audioAtts = msg.attachments.filter(
+                                (a) => a.type === "audio",
+                              );
                               return (
-                                <div key={r.type} className="relative">
-                                  <button
-                                    onClick={() =>
-                                      toggleReaction.mutate({
-                                        messageId: msg.id,
-                                        type: r.type as "👍" | "👎" | "❓",
-                                      })
-                                    }
-                                    onMouseEnter={() => setActiveTooltip(tooltipKey)}
-                                    onMouseLeave={() => setActiveTooltip(null)}
-                                    onContextMenu={(e) => {
-                                      e.preventDefault();
-                                      setActiveTooltip(tooltipKey);
-                                      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-                                      tooltipTimerRef.current = setTimeout(() => setActiveTooltip(null), 2500);
-                                    }}
-                                    className={`inline-flex items-center gap-1 font-mono text-[11px] px-[7px] py-0.5 border transition-all duration-150 ${
-                                      r.userReacted
-                                        ? "bg-pastel-tint text-pastel-ink border-pastel-deep"
-                                        : "text-muted border-border hover:border-pastel-deep"
-                                    }`}
-                                    style={r.userReacted ? { animation: "pop 240ms ease-out" } : undefined}
-                                  >
-                                    <span className="text-[12px]">{r.type}</span>
-                                    <span>{r.count}</span>
-                                  </button>
-                                  {isTooltipVisible && r.users.length > 0 && (
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-30 bg-ink text-surface font-mono text-[10px] px-2 py-1 pointer-events-none whitespace-nowrap max-w-[200px] overflow-hidden text-ellipsis">
-                                      {r.users.join(", ")}
+                                <div className="mt-2 space-y-2">
+                                  {imgAtts.length === 1 && (
+                                    <button
+                                      onClick={() =>
+                                        setActiveLightbox(imgAtts[0])
+                                      }
+                                      className="text-left transition-all duration-150 hover:scale-[1.03]"
+                                      style={{
+                                        background: "var(--background)",
+                                        padding: "8px 8px 28px 8px",
+                                        boxShadow:
+                                          "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
+                                        rotate: `${(0 % 2 === 0 ? 1 : -1) * (1 + (0 % 3) * 0.5)}deg`,
+                                        width: "160px",
+                                        display: "block",
+                                      }}
+                                    >
+                                      <img
+                                        src={imgAtts[0].url}
+                                        alt={imgAtts[0].name}
+                                        className="w-full object-cover"
+                                        style={{
+                                          aspectRatio: "1/1",
+                                          display: "block",
+                                        }}
+                                        loading="lazy"
+                                      />
+                                      <span
+                                        className="font-mono text-[10px] text-center truncate block mt-2"
+                                        style={{ color: "#888" }}
+                                      >
+                                        {imgAtts[0].name}
+                                      </span>
+                                    </button>
+                                  )}
+                                  {imgAtts.length >= 2 && (
+                                    <ImageGallery
+                                      attachments={imgAtts}
+                                      onOpen={setActiveLightbox}
+                                    />
+                                  )}
+                                  {audioAtts.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                      {audioAtts.map((att, i) => (
+                                        <button
+                                          key={i}
+                                          onClick={() => setActiveLightbox(att)}
+                                          className="flex items-center gap-2 border border-border px-3 py-2 hover:border-pastel-deep transition-colors"
+                                        >
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="12"
+                                            height="12"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="text-muted flex-shrink-0"
+                                          >
+                                            <path d="M9 18V5l12-2v13" />
+                                            <circle cx="6" cy="18" r="3" />
+                                            <circle cx="18" cy="16" r="3" />
+                                          </svg>
+                                          <span className="font-mono text-xs text-ink max-w-[160px] truncate">
+                                            {att.name}
+                                          </span>
+                                        </button>
+                                      ))}
                                     </div>
                                   )}
                                 </div>
                               );
-                            })}
+                            })()}
+
+                          {/* Reaction chips */}
+                          {!msg.is_deleted &&
+                            (msg.reactions ?? []).some((r) => r.count > 0) && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {msg.reactions
+                                  .filter((r) => r.count > 0)
+                                  .map((r) => {
+                                    const tooltipKey = `${msg.id}:${r.type}`;
+                                    const isTooltipVisible =
+                                      activeTooltip === tooltipKey;
+                                    return (
+                                      <div key={r.type} className="relative">
+                                        <button
+                                          onClick={() =>
+                                            toggleReaction.mutate({
+                                              messageId: msg.id,
+                                              type: r.type as
+                                                | "👍"
+                                                | "👎"
+                                                | "❓",
+                                            })
+                                          }
+                                          onMouseEnter={() =>
+                                            setActiveTooltip(tooltipKey)
+                                          }
+                                          onMouseLeave={() =>
+                                            setActiveTooltip(null)
+                                          }
+                                          onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            setActiveTooltip(tooltipKey);
+                                            if (tooltipTimerRef.current)
+                                              clearTimeout(
+                                                tooltipTimerRef.current,
+                                              );
+                                            tooltipTimerRef.current =
+                                              setTimeout(
+                                                () => setActiveTooltip(null),
+                                                2500,
+                                              );
+                                          }}
+                                          className={`inline-flex items-center gap-1 font-mono text-[11px] px-[7px] py-0.5 border transition-all duration-150 ${
+                                            r.userReacted
+                                              ? "bg-pastel-tint text-pastel-ink border-pastel-deep"
+                                              : "text-muted border-border hover:border-pastel-deep"
+                                          }`}
+                                          style={
+                                            r.userReacted
+                                              ? {
+                                                  animation:
+                                                    "pop 240ms ease-out",
+                                                }
+                                              : undefined
+                                          }
+                                        >
+                                          <span className="text-[12px]">
+                                            {r.type}
+                                          </span>
+                                          <span>{r.count}</span>
+                                        </button>
+                                        {isTooltipVisible &&
+                                          r.users.length > 0 && (
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-30 bg-ink text-surface font-mono text-[10px] px-2 py-1 pointer-events-none whitespace-nowrap max-w-[200px] overflow-hidden text-ellipsis">
+                                              {r.users.join(", ")}
+                                            </div>
+                                          )}
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-          })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </>
         )}
         <div ref={bottomRef} />
@@ -1852,7 +2227,9 @@ export function ThreadDetail({
       {/* Poll create modal */}
       {showPollCreate && (
         <PollCreateModal
-          onSubmit={(question, options) => createPoll.mutate({ threadId, question, options })}
+          onSubmit={(question, options) =>
+            createPoll.mutate({ threadId, question, options })
+          }
           onClose={() => setShowPollCreate(false)}
           isPending={createPoll.isPending}
         />
@@ -1870,7 +2247,6 @@ export function ThreadDetail({
 
       {/* Composer */}
       <div className="px-4 md:px-6 pt-3 md:pt-[14px] pb-4 border-t border-border flex-shrink-0 pb-safe relative">
-
         {/* @mention suggestions dropdown */}
         {mentionSuggestions.length > 0 && (
           <div className="absolute bottom-full left-4 right-4 md:left-6 md:right-6 mb-1 bg-surface border border-border shadow-lg z-20">
@@ -1883,7 +2259,8 @@ export function ThreadDetail({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => insertMention(member.display_name)}
               >
-                <span className="text-muted">@</span>{member.display_name}
+                <span className="text-muted">@</span>
+                {member.display_name}
               </button>
             ))}
           </div>
@@ -1938,7 +2315,9 @@ export function ThreadDetail({
                 key={i}
                 className="flex items-center gap-1.5 border border-border bg-surface-2 px-2 py-1 text-xs text-ink"
               >
-                <span className="max-w-[120px] truncate font-mono">{file.name}</span>
+                <span className="max-w-[120px] truncate font-mono">
+                  {file.name}
+                </span>
                 <button
                   onClick={() => removePendingFile(i)}
                   className="text-muted hover:text-ink transition-colors ml-0.5"
@@ -1950,98 +2329,95 @@ export function ThreadDetail({
           </div>
         )}
 
-        {!isDone && <div
-          ref={composerRef}
-          className="border border-border bg-surface-2 flex items-end gap-0 transition-all duration-200"
-          onFocusCapture={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = "var(--pastel-deep)";
-            el.style.boxShadow = "0 0 0 3px var(--pastel-tint)";
-          }}
-          onBlurCapture={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = "";
-            el.style.boxShadow = "";
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,audio/*"
-            multiple
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            id="image-only-input"
-            onChange={handleFileChange}
-          />
-          {/* "+" attach menu */}
-          <div className="relative flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setAttachMenuOpen((o) => !o)}
-              title="Attach or create poll"
-              className="h-11 w-11 md:h-10 md:w-10 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors font-mono text-lg leading-none"
-            >
-              +
-            </button>
-            {attachMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setAttachMenuOpen(false)} />
-                <div className="absolute bottom-full left-0 mb-1 z-20 bg-surface border border-border shadow-lg min-w-[160px]">
-                  <button
-                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2 border-b border-border"
-                    onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
-                  >
-                    Attach a file
-                  </button>
-                  <button
-                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2 border-b border-border"
-                    onClick={() => { setAttachMenuOpen(false); document.getElementById("image-only-input")?.click(); }}
-                  >
-                    Send image
-                  </button>
-                  <button
-                    className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2"
-                    onClick={() => { setAttachMenuOpen(false); setShowPollCreate(true); }}
-                  >
-                    Create a poll
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-          <textarea
-            ref={textareaRef}
-            value={body}
-            onChange={handleBodyChange}
-            onKeyDown={handleKeyDown}
-            placeholder={`Write to #${initialTitle}…`}
-            rows={1}
-            className="flex-1 min-h-[44px] md:min-h-[40px] max-h-40 border-none bg-transparent px-2.5 py-[10px] font-sans text-base md:text-[13.5px] leading-[1.45] text-ink placeholder:text-muted resize-none outline-none overflow-y-auto"
-            onInput={(e) => {
-              const t = e.currentTarget;
-              t.style.height = "auto";
-              t.style.height = `${Math.min(t.scrollHeight, 160)}px`;
+        {!isDone && (
+          <div
+            ref={composerRef}
+            className="border border-border bg-surface-2 flex items-end gap-0 transition-all duration-200"
+            onFocusCapture={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.borderColor = "var(--pastel-deep)";
+              el.style.boxShadow = "0 0 0 3px var(--pastel-tint)";
             }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            className={`h-11 md:h-10 px-4 flex-shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] border-none transition-all duration-200 ${
-              canSend
-                ? "bg-ink text-surface cursor-pointer hover:-translate-y-px"
-                : "bg-border text-muted-2 cursor-not-allowed"
-            }`}
+            onBlurCapture={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.borderColor = "";
+              el.style.boxShadow = "";
+            }}
           >
-            {uploading ? "↑" : sendMessage.isPending ? "…" : "send"}
-          </button>
-        </div>}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,audio/*"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {/* "+" attach menu */}
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setAttachMenuOpen((o) => !o)}
+                title="Attach or create poll"
+                className="h-11 w-11 md:h-10 md:w-10 flex items-center justify-center text-muted hover:text-pastel-ink transition-colors font-mono text-lg leading-none"
+              >
+                +
+              </button>
+              {attachMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setAttachMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full left-0 mb-1 z-20 bg-surface border border-border shadow-lg min-w-[160px]">
+                    <button
+                      className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2 border-b border-border"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      Attach a file
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 font-mono text-[12px] text-ink hover:bg-surface-2"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        setShowPollCreate(true);
+                      }}
+                    >
+                      Create a poll
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={body}
+              onChange={handleBodyChange}
+              onKeyDown={handleKeyDown}
+              placeholder={`Write to #${initialTitle}…`}
+              rows={1}
+              className="flex-1 min-h-[44px] md:min-h-[40px] max-h-40 border-none bg-transparent px-2.5 py-[10px] font-sans text-base md:text-[13.5px] leading-[1.45] text-ink placeholder:text-muted resize-none outline-none overflow-y-auto"
+              onInput={(e) => {
+                const t = e.currentTarget;
+                t.style.height = "auto";
+                t.style.height = `${Math.min(t.scrollHeight, 160)}px`;
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              className={`h-11 md:h-10 px-4 flex-shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] border-none transition-all duration-200 ${
+                canSend
+                  ? "bg-ink text-surface cursor-pointer hover:-translate-y-px"
+                  : "bg-border text-muted-2 cursor-not-allowed"
+              }`}
+            >
+              {uploading ? "↑" : sendMessage.isPending ? "…" : "send"}
+            </button>
+          </div>
+        )}
 
         {/* Typing indicator */}
         {typingUsers.length > 0 && (
@@ -2053,19 +2429,23 @@ export function ThreadDetail({
         )}
 
         {/* Composer hint */}
-        {!isDone && <div className="flex items-center justify-between mt-1.5">
-          <span className="font-mono text-[10px] text-muted-2">⏎ send · ⇧⏎ newline · @ mention</span>
-          <span className="font-mono text-[10px] text-muted-2 flex items-center gap-1">
-            <span
-              className="w-[5px] h-[5px] rounded-full"
-              style={{
-                background: "var(--pastel-deep)",
-                animation: "pulseDot 2s ease-in-out infinite",
-              }}
-            />
-            live
-          </span>
-        </div>}
+        {!isDone && (
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="font-mono text-[10px] text-muted-2">
+              ⏎ send · ⇧⏎ newline · @ mention
+            </span>
+            <span className="font-mono text-[10px] text-muted-2 flex items-center gap-1">
+              <span
+                className="w-[5px] h-[5px] rounded-full"
+                style={{
+                  background: "var(--pastel-deep)",
+                  animation: "pulseDot 2s ease-in-out infinite",
+                }}
+              />
+              live
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

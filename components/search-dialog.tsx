@@ -148,7 +148,7 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Filter row */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-surface">
           <span className="font-mono text-[10px] text-muted-2 uppercase tracking-[0.12em] flex-shrink-0">in</span>
 
           {/* Group selector */}
@@ -189,7 +189,7 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
 
         {/* Results */}
         {showResults && (
-          <div className="overflow-y-auto max-h-[400px]">
+          <div className="overflow-y-auto max-h-[400px]" style={{ maxHeight: 'min(400px, calc(100vh - 200px))' }}>
             {noResults ? (
               <p className="font-mono text-[12px] text-muted px-4 py-6 text-center">
                 no results for &ldquo;{debouncedQ}&rdquo;

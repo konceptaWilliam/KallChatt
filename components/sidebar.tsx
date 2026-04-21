@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc/client";
 
 type Group = { id: string; name: string };
 
-function CreateGroupModal({ onClose }: { onClose: () => void }) {
+export function CreateGroupModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const [name, setName] = useState("");
@@ -74,7 +74,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
                 <input
                   autoFocus
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setName(e.target.value.replace(/ /g, "_"))}
                   maxLength={80}
                   placeholder="e.g. Design"
                   className="w-full border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-ink"
@@ -207,7 +207,7 @@ export function Sidebar({
         {/* Search */}
         <button
           onClick={() => setSearchOpen(true)}
-          className="mx-3 mb-3 flex items-center gap-2 px-2.5 py-1.5 border border-border text-muted hover:text-ink hover:border-border-strong transition-colors w-[calc(100%-24px)]"
+          className="mx-3 mb-3 flex items-center gap-2 px-2.5 py-1.5 border border-border text-muted hover:text-ink hover:border-border-strong transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -249,7 +249,7 @@ export function Sidebar({
                 >
                   <span className="flex items-center gap-2">
                     <span className={isActive ? "text-pastel-deep" : "text-muted-2"}>·</span>
-                    {group.name}
+                    <span className="lowercase">{group.name}</span>
                   </span>
                   {(groupCounts[group.id] ?? 0) > 0 && (
                     <span

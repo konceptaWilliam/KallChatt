@@ -133,14 +133,14 @@ function GroupInfoModal({ groupId, groupName, onClose }: { groupId: string; grou
         <div className="flex items-start justify-between mb-4">
           {editing ? (
             <form className="flex gap-2 flex-1 mr-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) rename.mutate({ groupId, name: name.trim() }); }}>
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80}
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value.replace(/ /g, "_"))} maxLength={80}
                 className="flex-1 border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-ink focus:outline-none focus:border-ink" />
               <button type="submit" disabled={!name.trim() || rename.isPending} className="font-mono text-[10px] bg-ink text-surface px-2 py-1 disabled:opacity-40">Save</button>
               <button type="button" onClick={() => { setEditing(false); setName(groupName); }} className="font-mono text-[10px] text-muted hover:text-ink px-1">×</button>
             </form>
           ) : (
             <div className="flex items-center gap-2 flex-1 mr-2">
-              <p className="font-mono text-sm font-semibold text-ink">{groupName}</p>
+              <p className="font-mono text-sm font-semibold text-ink lowercase">{groupName}</p>
               {isAdmin && <button onClick={() => setEditing(true)} className="font-mono text-[10px] text-muted hover:text-ink">rename</button>}
             </div>
           )}
@@ -323,7 +323,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
             onClick={() => setShowGroupInfo(true)}
             className="font-mono text-sm font-semibold text-ink flex-1 truncate min-w-0 text-left hover:text-muted transition-colors"
           >
-            <span className="text-muted-2">· </span>{groupName}
+            <span className="text-muted-2">· </span><span className="lowercase">{groupName}</span>
           </button>
 
           <button
@@ -387,7 +387,7 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
                     } ${unread > 0 ? "font-semibold" : isActive ? "font-semibold" : "font-medium"}`}
                   >
                     <span className="text-muted-2"># </span>
-                    {thread.title}
+                    <span className="lowercase">{thread.title}</span>
                   </span>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {unread > 0 && <UnreadPrism isUrgent={thread.status === "URGENT"} />}
