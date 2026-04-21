@@ -10,7 +10,7 @@ export function createTRPCClient() {
   return trpc.createClient({
     links: [
       httpBatchLink({
-        url: `${process.env.EXPO_PUBLIC_APP_URL}/api/trpc`,
+        url: `${process.env.EXPO_PUBLIC_APP_URL?.replace(/\/$/, "")}/api/trpc`,
         transformer: superjson,
         async headers() {
           const { data } = await supabase.auth.getSession();
