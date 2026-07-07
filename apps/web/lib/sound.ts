@@ -1,13 +1,14 @@
-// Subtle, opt-in UI sounds (message send / receive). Synthesised with the Web
-// Audio API — no asset files, zero bundle cost. Off by default; the explicit
-// toggle in settings is the consent. Device-local (localStorage), like the
-// theme preference.
+// Subtle UI sounds (message send / receive). Synthesised with the Web Audio
+// API — no asset files, zero bundle cost. On by default; the toggle in settings
+// lets a user turn them off. Device-local (localStorage), like the theme
+// preference — only an explicit "off" is stored, so a fresh device defaults on.
 
 const KEY = "coldsoup:sound";
 
 export function isSoundEnabled(): boolean {
   try {
-    return localStorage.getItem(KEY) === "1";
+    // Default on: enabled unless the user explicitly turned it off.
+    return localStorage.getItem(KEY) !== "0";
   } catch {
     return false;
   }
@@ -15,8 +16,8 @@ export function isSoundEnabled(): boolean {
 
 export function setSoundEnabled(on: boolean): void {
   try {
-    if (on) localStorage.setItem(KEY, "1");
-    else localStorage.removeItem(KEY);
+    if (on) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, "0");
   } catch {
     /* localStorage unavailable — ignore */
   }
