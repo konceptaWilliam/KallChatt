@@ -545,6 +545,48 @@ function mentionsUser(body: string, displayName: string): boolean {
   return new RegExp(`@${escaped}(?!\\w)`).test(body);
 }
 
+const URL_RE = /https?:\/\/[^\s<]+/g;
+
+// Split a plain-text run into text + clickable <a> nodes for any http(s) URLs.
+// `keyBase` must be unique per run so the returned nodes get stable sibling keys.
+function linkify(text: string, keyBase: number): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((m = URL_RE.exec(text)) !== null) {
+    let url = m[0];
+    // Don't let trailing sentence punctuation get pulled into the href.
+    const trail = url.match(/[.,!?;:)\]]+$/);
+    const trailing = trail ? trail[0] : "";
+    if (trailing) url = url.slice(0, url.length - trailing.length);
+    if (m.index > last) {
+      nodes.push(<span key={`${keyBase}-t${i++}`}>{text.slice(last, m.index)}</span>);
+    }
+    nodes.push(
+      <a
+        key={`${keyBase}-l${i++}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline text-ink hover:opacity-70 break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>,
+    );
+    if (trailing) {
+      nodes.push(<span key={`${keyBase}-p${i++}`}>{trailing}</span>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    nodes.push(<span key={`${keyBase}-t${i++}`}>{text.slice(last)}</span>);
+  }
+  return nodes;
+}
+
 function renderBody(
   body: string,
   members: { id: string; display_name: string }[],
@@ -568,7 +610,7 @@ function renderBody(
   regex.lastIndex = 0;
   while ((match = regex.exec(body)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(<span key={key++}>{body.slice(lastIndex, match.index)}</span>);
+      parts.push(...linkify(body.slice(lastIndex, match.index), key++));
     }
     const member = members.find((m) => m.display_name === match![1]);
     const isMe = member?.id === myId;
@@ -586,7 +628,7 @@ function renderBody(
   }
 
   if (lastIndex < body.length) {
-    parts.push(<span key={key++}>{body.slice(lastIndex)}</span>);
+    parts.push(...linkify(body.slice(lastIndex), key++));
   }
 
   return parts.length ? <>{parts}</> : body;
