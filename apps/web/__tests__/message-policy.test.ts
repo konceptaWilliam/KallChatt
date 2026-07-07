@@ -7,6 +7,7 @@ import {
   mentionsEveryone,
   shouldNotify,
   buildCatchUp,
+  shouldSendPush,
   type CatchUpThread,
 } from "../lib/message-policy.ts";
 
@@ -177,4 +178,44 @@ test("buildCatchUp: urgentThreads sorted newest-first and capped", () => {
   );
   assert.equal(out.urgentTotal, 3);
   assert.equal(out.urgentThreads.map((t) => t.id).join(","), "new,mid");
+});
+
+// --- shouldSendPush --------------------------------------------------------
+
+const base = { nowMs: 1_000_000, windowMs: 60_000, mentioned: false, urgent: false };
+
+test("shouldSendPush: first push (never pushed) is allowed", () => {
+  assert.equal(shouldSendPush({ ...base, lastPushedAtMs: null }), true);
+});
+
+test("shouldSendPush: within the window is suppressed", () => {
+  assert.equal(
+    shouldSendPush({ ...base, lastPushedAtMs: base.nowMs - 30_000 }),
+    false,
+  );
+});
+
+test("shouldSendPush: at/after the window is allowed", () => {
+  assert.equal(
+    shouldSendPush({ ...base, lastPushedAtMs: base.nowMs - 60_000 }),
+    true,
+  );
+  assert.equal(
+    shouldSendPush({ ...base, lastPushedAtMs: base.nowMs - 90_000 }),
+    true,
+  );
+});
+
+test("shouldSendPush: a mention breaks through the window", () => {
+  assert.equal(
+    shouldSendPush({ ...base, lastPushedAtMs: base.nowMs - 1, mentioned: true }),
+    true,
+  );
+});
+
+test("shouldSendPush: an URGENT thread breaks through the window", () => {
+  assert.equal(
+    shouldSendPush({ ...base, lastPushedAtMs: base.nowMs - 1, urgent: true }),
+    true,
+  );
 });
