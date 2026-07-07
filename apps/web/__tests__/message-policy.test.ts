@@ -6,6 +6,8 @@ import {
   isMentioned,
   mentionsEveryone,
   shouldNotify,
+  buildCatchUp,
+  type CatchUpThread,
 } from "../lib/message-policy.ts";
 
 const HOST = "https://abc123.supabase.co";
@@ -105,4 +107,74 @@ test("shouldNotify: default ALL, unmuted, notified", () => {
     shouldNotify({ paused: false, level: "ALL", threadMuted: false, mentioned: false }),
     true,
   );
+});
+
+// --- buildCatchUp ----------------------------------------------------------
+
+const T0 = "2026-07-01T10:00:00.000Z";
+const T1 = "2026-07-01T11:00:00.000Z";
+const T2 = "2026-07-01T12:00:00.000Z";
+const ms = (iso: string) => new Date(iso).getTime();
+
+function th(over: Partial<CatchUpThread> & { id: string }): CatchUpThread {
+  return {
+    title: over.id,
+    group_id: "g1",
+    group_name: "grp",
+    status: "OPEN",
+    updated_at: T1,
+    ...over,
+  };
+}
+
+test("buildCatchUp: a thread updated after its read marker is unread", () => {
+  const out = buildCatchUp([th({ id: "a", updated_at: T2 })], { a: ms(T1) });
+  assert.equal(out.unreadTotal, 1);
+});
+
+test("buildCatchUp: a thread read at/after its update is not unread", () => {
+  const out = buildCatchUp([th({ id: "a", updated_at: T1 })], { a: ms(T1) });
+  assert.equal(out.unreadTotal, 0);
+  assert.equal(out.urgentTotal, 0);
+});
+
+test("buildCatchUp: missing read marker means never read (unread)", () => {
+  const out = buildCatchUp([th({ id: "a", updated_at: T0 })], {});
+  assert.equal(out.unreadTotal, 1);
+});
+
+test("buildCatchUp: DONE threads are excluded from unreadTotal", () => {
+  const out = buildCatchUp(
+    [th({ id: "a", status: "DONE", updated_at: T2 })],
+    {},
+  );
+  assert.equal(out.unreadTotal, 0);
+});
+
+test("buildCatchUp: urgentTotal counts only unread URGENT threads", () => {
+  const out = buildCatchUp(
+    [
+      th({ id: "a", status: "URGENT", updated_at: T2 }), // unread urgent
+      th({ id: "b", status: "URGENT", updated_at: T1 }), // read (marker == update)
+      th({ id: "c", status: "OPEN", updated_at: T2 }), // unread but not urgent
+    ],
+    { b: ms(T1) },
+  );
+  assert.equal(out.urgentTotal, 1);
+  assert.equal(out.urgentThreads.map((t) => t.id).join(","), "a");
+  assert.equal(out.unreadTotal, 2); // a + c
+});
+
+test("buildCatchUp: urgentThreads sorted newest-first and capped", () => {
+  const out = buildCatchUp(
+    [
+      th({ id: "old", status: "URGENT", updated_at: T0 }),
+      th({ id: "new", status: "URGENT", updated_at: T2 }),
+      th({ id: "mid", status: "URGENT", updated_at: T1 }),
+    ],
+    {},
+    { urgentLimit: 2 },
+  );
+  assert.equal(out.urgentTotal, 3);
+  assert.equal(out.urgentThreads.map((t) => t.id).join(","), "new,mid");
 });

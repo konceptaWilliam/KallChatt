@@ -52,6 +52,61 @@ export function isMentioned(body: string, displayName: string | null | undefined
   return !!displayName && lower.includes(`@${displayName.toLowerCase()}`);
 }
 
+// --- Catch-up / completion-loop -------------------------------------------
+// Server-authoritative "what awaits you" summary, driving the login opener. A
+// thread is unread when its updated_at (bumped on every new message) is newer
+// than the caller's thread_reads marker — the same definition as groups.unread.
+
+export type ThreadStatus = "OPEN" | "URGENT" | "DONE";
+
+export type CatchUpThread = {
+  id: string;
+  title: string;
+  group_id: string;
+  group_name: string;
+  status: ThreadStatus;
+  updated_at: string;
+};
+
+export type CatchUpSummary = {
+  // URGENT unread threads (count + capped list for deep-linking, newest first).
+  urgentTotal: number;
+  urgentThreads: CatchUpThread[];
+  // All unread threads excluding DONE — a resolved thread shouldn't nag even if
+  // it saw late activity.
+  unreadTotal: number;
+};
+
+// Pure: given the caller's threads and their per-thread last-read epoch ms,
+// derive the catch-up summary. Env-free and I/O-free so it unit-tests without a
+// database (the tRPC router supplies the data). `readAtMs[threadId]` missing →
+// treated as never read (0).
+export function buildCatchUp(
+  threads: CatchUpThread[],
+  readAtMs: Record<string, number>,
+  opts?: { urgentLimit?: number },
+): CatchUpSummary {
+  const urgentLimit = opts?.urgentLimit ?? 10;
+
+  const unread = threads.filter((t) => {
+    const updated = new Date(t.updated_at).getTime();
+    return updated > (readAtMs[t.id] ?? 0);
+  });
+
+  const urgent = unread
+    .filter((t) => t.status === "URGENT")
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+
+  return {
+    urgentTotal: urgent.length,
+    urgentThreads: urgent.slice(0, urgentLimit),
+    unreadTotal: unread.filter((t) => t.status !== "DONE").length,
+  };
+}
+
 // Core notification decision. Mentions bypass a thread mute; level NONE and a
 // global pause always win.
 export function shouldNotify(opts: {
