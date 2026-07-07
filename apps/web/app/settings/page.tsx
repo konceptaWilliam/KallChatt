@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CreateGroupModal } from "@/components/sidebar";
 import { WebPushToggle } from "@/components/web-push-toggle";
 import { useTheme, type ThemeMode } from "@/lib/theme-context";
+import { isSoundEnabled, setSoundEnabled, playReceive } from "@/lib/sound";
 
 const CROP_DISPLAY = 280;
 const MAX_ZOOM = 4;
@@ -712,6 +713,17 @@ function NotificationsSection() {
   const { data: prefs, isLoading } = trpc.notifications.prefs.useQuery();
   const { data: groups = [] } = trpc.groups.list.useQuery();
 
+  // Device-local sound preference (localStorage), read after mount to avoid an
+  // SSR/client mismatch.
+  const [sound, setSound] = useState(false);
+  useEffect(() => setSound(isSoundEnabled()), []);
+  const toggleSound = () => {
+    const next = !sound;
+    setSoundEnabled(next);
+    setSound(next);
+    if (next) playReceive(); // let the user hear what they just enabled
+  };
+
   const setPaused = trpc.notifications.setPaused.useMutation({
     onMutate: async ({ paused }) => {
       await utils.notifications.prefs.cancel();
@@ -777,6 +789,26 @@ function NotificationsSection() {
                 }`}
               >
                 {prefs?.paused ? "On" : "Off"}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+              <div>
+                <p className="text-sm text-ink">Sounds</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Subtle blip on send and on new messages. This device only.
+                </p>
+              </div>
+              <button
+                onClick={toggleSound}
+                aria-pressed={sound}
+                className={`min-w-16 border px-3 py-2 font-mono text-xs uppercase tracking-[0.08em] ${
+                  sound
+                    ? "bg-ink text-surface border-ink"
+                    : "bg-surface-2 text-muted border-border hover:text-ink"
+                }`}
+              >
+                {sound ? "On" : "Off"}
               </button>
             </div>
 

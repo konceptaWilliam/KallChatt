@@ -14,6 +14,7 @@ import { useUnread } from "@/lib/unread-context";
 import { useOnline } from "@/lib/presence-context";
 import { validateFile, resizeImageIfNeeded, attachmentTypeFor } from "@/lib/file-utils";
 import { haptic } from "@/lib/haptics";
+import { playSend, playReceive } from "@/lib/sound";
 import { SMeterCard, SMeterCreateModal, SMeterResultsLink, type SMeterSummary } from "@/components/smeter";
 import { systemEventText, type SystemEvent } from "@/lib/system-event";
 
@@ -2718,16 +2719,16 @@ export function ThreadDetail({
             return [...prev, reconciled];
           });
 
-          // Distinct buzz when someone else @mentions me, live in the thread.
-          // Skip our own messages (and their realtime echo). Read myInfo via ref
-          // — the effect closure doesn't track it.
+          // Feedback for a message from someone else, live in the thread: a
+          // soft receive sound, plus a distinct buzz if it @mentions me. Skip
+          // our own messages (and their realtime echo). Read myInfo via ref —
+          // the effect closure doesn't track it.
           const me = myInfoRef.current;
-          if (
-            me?.id &&
-            newMsg.user_id !== me.id &&
-            mentionsUser(newMsg.body, me.display_name)
-          ) {
-            haptic(MENTION_HAPTIC);
+          if (me?.id && newMsg.user_id !== me.id) {
+            playReceive();
+            if (mentionsUser(newMsg.body, me.display_name)) {
+              haptic(MENTION_HAPTIC);
+            }
           }
         },
       )
@@ -2852,6 +2853,7 @@ export function ThreadDetail({
   const sendMessage = trpc.messages.send.useMutation({
     onMutate: (vars) => {
       haptic("light");
+      playSend();
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const clientId = vars.clientId ?? tempId;
       const messageBody = vars.body ?? "";
