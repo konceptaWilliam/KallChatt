@@ -2,7 +2,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isValidAttachmentUrl, isMentioned, shouldNotify, type NotifLevel } from "@/lib/message-policy";
+import { isValidAttachmentUrl, isMentioned, shouldNotify, shouldSendPush, type NotifLevel } from "@/lib/message-policy";
+
+// Suppress repeat pushes to the same user about the same thread within this
+// window (a mention / URGENT thread bypasses it). See shouldSendPush.
+const PUSH_DEBOUNCE_MS = 60_000;
 
 // Run background work after the response flushes without Vercel freezing the
 // function mid-flight. Mirrors @vercel/functions' waitUntil by reading Vercel's
@@ -302,7 +306,7 @@ export const messagesRouter = router({
 
       const { data: thread } = await supabase
         .from("threads")
-        .select("group_id")
+        .select("group_id, status")
         .eq("id", input.threadId)
         .single();
 
@@ -467,6 +471,51 @@ export const messagesRouter = router({
         const eligibleUserIds = recipients.map((r) => r.user_id);
         const mentionedUserIds = new Set(recipients.filter((r) => r.mentioned).map((r) => r.user_id));
 
+        // Debounce: drop recipients we pushed about this thread within the
+        // window (a mention or URGENT thread bypasses it). Channel-agnostic —
+        // one throttle row per (user, thread) gates both Expo and Web Push.
+        const now = Date.now();
+        const urgent = thread.status === "URGENT";
+        const lastPushedByUser = new Map<string, number>();
+        if (eligibleUserIds.length > 0) {
+          const { data: throttleRows } = await admin
+            .from("push_throttle")
+            .select("user_id, last_pushed_at")
+            .eq("thread_id", input.threadId)
+            .in("user_id", eligibleUserIds);
+          for (const row of throttleRows ?? []) {
+            lastPushedByUser.set(
+              row.user_id as string,
+              new Date(row.last_pushed_at as string).getTime(),
+            );
+          }
+        }
+        const pushableUserIds = new Set(
+          eligibleUserIds.filter((uid) =>
+            shouldSendPush({
+              lastPushedAtMs: lastPushedByUser.get(uid) ?? null,
+              nowMs: now,
+              windowMs: PUSH_DEBOUNCE_MS,
+              mentioned: mentionedUserIds.has(uid),
+              urgent,
+            }),
+          ),
+        );
+
+        // Everyone still eligible after mute/level filtering counts toward the
+        // in-app unread badge; only the debounce decides who gets a *buzz*.
+        if (pushableUserIds.size === 0) return;
+
+        // Record the buzz so the next message in this thread is debounced.
+        await admin.from("push_throttle").upsert(
+          Array.from(pushableUserIds).map((uid) => ({
+            user_id: uid,
+            thread_id: input.threadId,
+            last_pushed_at: new Date(now).toISOString(),
+          })),
+          { onConflict: "user_id,thread_id" },
+        );
+
         const previewBody = input.body.slice(0, 100) || describeAttachments(input.attachments);
 
         // Location line: ".group#thread" so recipients see where it came from.
@@ -482,7 +531,7 @@ export const messagesRouter = router({
         // --- Expo push (mobile app) ---
         // Mentions get a distinct title so they stand out on the lock screen.
         const pushMessages = recipients
-          .filter((r) => r.push_token)
+          .filter((r) => r.push_token && pushableUserIds.has(r.user_id))
           .map((r) => ({
             to: r.push_token as string,
             title: r.mentioned ? `@ ${senderName} mentioned you` : senderName,
@@ -502,12 +551,12 @@ export const messagesRouter = router({
 
         // --- Web Push (PWA) ---
         // Inside waitUntil(): runs post-response but stays alive on Vercel.
-        if (eligibleUserIds.length > 0) {
+        {
           try {
             const { data: subs } = await admin
               .from("push_subscriptions")
               .select("user_id, endpoint, p256dh, auth")
-              .in("user_id", eligibleUserIds);
+              .in("user_id", Array.from(pushableUserIds));
             if (subs && subs.length > 0) {
               const { sendWebPush } = await import("@/lib/web-push");
               // Real per-user unread-thread count → drives the PWA app-icon

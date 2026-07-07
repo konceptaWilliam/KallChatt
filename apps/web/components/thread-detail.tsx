@@ -14,6 +14,7 @@ import { useUnread } from "@/lib/unread-context";
 import { useOnline } from "@/lib/presence-context";
 import { validateFile, resizeImageIfNeeded, attachmentTypeFor } from "@/lib/file-utils";
 import { haptic } from "@/lib/haptics";
+import { playSend, playReceive } from "@/lib/sound";
 import { SMeterCard, SMeterCreateModal, SMeterResultsLink, type SMeterSummary } from "@/components/smeter";
 import { systemEventText, type SystemEvent } from "@/lib/system-event";
 
@@ -531,6 +532,18 @@ function formatDate(dateStr: string): string {
 }
 
 const MENTION_SPECIALS = ["everyone", "here"];
+
+// Distinct haptic for an incoming @mention — a double pulse, clearly different
+// from the single `light` tap fired on send.
+const MENTION_HAPTIC: VibratePattern = [12, 30, 12];
+
+// True when `body` mentions this user by name, or via @everyone / @here.
+function mentionsUser(body: string, displayName: string): boolean {
+  if (!body) return false;
+  if (new RegExp(`@(${MENTION_SPECIALS.join("|")})(?!\\w)`).test(body)) return true;
+  const escaped = displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${escaped}(?!\\w)`).test(body);
+}
 
 function renderBody(
   body: string,
@@ -2336,6 +2349,12 @@ export function ThreadDetail({
   const membersRef = useRef(workspaceMembers);
   membersRef.current = workspaceMembers;
 
+  // myInfo mirrored in a ref so the realtime INSERT handler (whose effect does
+  // not depend on myInfo) reads the current value instead of the stale closure
+  // captured when the channel first subscribed.
+  const myInfoRef = useRef(myInfo);
+  myInfoRef.current = myInfo;
+
   const mentionSuggestions = useMemo(() => {
     if (mentionQuery === null || !workspaceMembers) return [];
     const q = mentionQuery.toLowerCase();
@@ -2699,6 +2718,18 @@ export function ThreadDetail({
             }
             return [...prev, reconciled];
           });
+
+          // Feedback for a message from someone else, live in the thread: a
+          // soft receive sound, plus a distinct buzz if it @mentions me. Skip
+          // our own messages (and their realtime echo). Read myInfo via ref —
+          // the effect closure doesn't track it.
+          const me = myInfoRef.current;
+          if (me?.id && newMsg.user_id !== me.id) {
+            playReceive();
+            if (mentionsUser(newMsg.body, me.display_name)) {
+              haptic(MENTION_HAPTIC);
+            }
+          }
         },
       )
       .on(
@@ -2822,6 +2853,7 @@ export function ThreadDetail({
   const sendMessage = trpc.messages.send.useMutation({
     onMutate: (vars) => {
       haptic("light");
+      playSend();
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const clientId = vars.clientId ?? tempId;
       const messageBody = vars.body ?? "";

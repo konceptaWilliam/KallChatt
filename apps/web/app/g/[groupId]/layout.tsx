@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/sidebar";
 import { SwipeToOpenSidebar } from "@/components/swipe-to-open-sidebar";
 import { IntroOverlay } from "@/components/intro-overlay";
 import { NotificationNudge } from "@/components/notification-nudge";
+import { CatchUpBanner } from "@/components/catch-up-banner";
 import { UnreadProvider } from "@/lib/unread-context";
 import { MobileSidebarProvider } from "@/lib/mobile-sidebar-context";
 
@@ -56,6 +57,7 @@ export default async function GroupLayout({
         </div>
         <IntroOverlay seen={!!(profile as { intro_seen?: boolean }).intro_seen} />
         <NotificationNudge />
+        <CatchUpBanner />
       </MobileSidebarProvider>
     </UnreadProvider>
   );

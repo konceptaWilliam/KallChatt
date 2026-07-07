@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { postSystemMessage } from "@/lib/system-messages";
+import { buildCatchUp, type CatchUpThread } from "@/lib/message-policy";
 
 const threadStatusSchema = z.enum(["OPEN", "URGENT", "DONE"]);
 
@@ -374,6 +375,55 @@ export const threadsRouter = router({
         };
       });
     }),
+
+  // Login "catch-up" opener: what awaits the caller across all their groups —
+  // unread URGENT threads (with a deep-linkable list) + total unread count.
+  // Server-authoritative via thread_reads, so it works on a fresh device with
+  // no client-side lastSeen baseline. Selection/counting logic lives in the
+  // pure buildCatchUp() (unit-tested); this only does the I/O.
+  catchUp: protectedProcedure.query(async ({ ctx }) => {
+    const { supabase, profile } = ctx;
+    const admin = createAdminClient();
+
+    const empty = { urgentTotal: 0, urgentThreads: [], unreadTotal: 0 };
+
+    const { data: memberships } = await supabase
+      .from("group_memberships")
+      .select("group_id")
+      .eq("user_id", profile.id);
+    const groupIds = (memberships ?? []).map((m) => m.group_id as string);
+    if (groupIds.length === 0) return empty;
+
+    const { data: rows } = await admin
+      .from("threads")
+      .select("id, title, group_id, status, updated_at, groups(name)")
+      .in("group_id", groupIds);
+    if (!rows || rows.length === 0) return empty;
+
+    const threads: CatchUpThread[] = rows.map((t) => ({
+      id: t.id as string,
+      title: (t.title as string) ?? "",
+      group_id: t.group_id as string,
+      group_name:
+        (t.groups as unknown as { name: string } | null)?.name ?? "",
+      status: t.status as CatchUpThread["status"],
+      updated_at: t.updated_at as string,
+    }));
+
+    const { data: reads } = await admin
+      .from("thread_reads")
+      .select("thread_id, last_read_at")
+      .eq("user_id", profile.id)
+      .in("thread_id", threads.map((t) => t.id));
+    const readAtMs: Record<string, number> = {};
+    for (const r of reads ?? []) {
+      readAtMs[r.thread_id as string] = new Date(
+        r.last_read_at as string,
+      ).getTime();
+    }
+
+    return buildCatchUp(threads, readAtMs);
+  }),
 
   updateStatus: protectedProcedure
     .input(

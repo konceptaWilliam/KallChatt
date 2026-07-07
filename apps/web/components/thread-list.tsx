@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
@@ -374,6 +374,20 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
   const { threadCounts, setThreadCount } = useUnread();
   const { open: openSidebar } = useMobileSidebar();
 
+  // Warm the message cache on hover/focus so opening a thread shows messages
+  // instantly instead of a blank panel. RQ dedupes in-flight fetches and the
+  // 30s staleTime skips already-fresh ones; the ref just avoids re-issuing per
+  // mouse re-entry within a session.
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  const prefetchThread = useCallback(
+    (threadId: string) => {
+      if (prefetchedRef.current.has(threadId)) return;
+      prefetchedRef.current.add(threadId);
+      void utils.messages.list.prefetch({ threadId });
+    },
+    [utils],
+  );
+
   // On mobile, hide thread list when a thread is open so the detail takes full width
   const isOnThread = /\/t\//.test(pathname);
 
@@ -577,6 +591,8 @@ export function ThreadList({ groupId, groupName }: { groupId: string; groupName:
               <Link
                 key={thread.id}
                 href={href}
+                onMouseEnter={() => prefetchThread(thread.id)}
+                onFocus={() => prefetchThread(thread.id)}
                 className={`block py-3 border-b border-border transition-all duration-150 ${
                   isDone ? "opacity-35" : dimRead ? "opacity-60" : ""
                 } ${isActive ? "bg-pastel-tint/60" : "[@media(hover:hover)]:hover:bg-border/30"}`}

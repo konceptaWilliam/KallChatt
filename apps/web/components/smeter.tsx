@@ -40,7 +40,7 @@ const MOOD: Record<string, string> = {
   okay: "Split — needs compromise",
   tough: "Hard for several",
   blocked: "Blocked — someone can't",
-  bad: "Bad day",
+  bad: "Bad for everyone",
 };
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -275,12 +275,14 @@ function VotingView({
   const current = scores[day] ?? null;
   const isLast = day === total - 1;
   const allScored = Object.keys(scores).length === total;
+  // "Statement" mode has no days; use the mode's own noun for step labels.
+  const unit = data.mode === "statements" ? "Statement" : "Day";
 
   return (
     <div className="space-y-4">
       <div>
         <p className="font-mono text-[12px] font-bold uppercase tracking-wide text-black mb-1.5">
-          Day {day + 1} of {total}
+          {unit} {day + 1} of {total}
         </p>
         <div className="flex gap-1">
           {Array.from({ length: total }).map((_, i) => (
@@ -334,7 +336,7 @@ function VotingView({
             disabled={!current}
             className="flex-[2] border-2 border-black bg-yellow-300 shadow-[4px_4px_0_black] py-3 font-mono font-extrabold text-black hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-40"
           >
-            Next day →
+            Next {unit.toLowerCase()} →
           </button>
         )}
       </div>
@@ -377,6 +379,7 @@ function StatsView({ data, stats }: { data: GetData; stats: NonNullable<GetData[
   const [selected, setSelected] = useState(stats.bestDay);
   const cd = data.customDates;
   const cl = data.customLabels;
+  const unit = data.mode === "statements" ? "statement" : "day";
   const best = stats.days[stats.bestDay];
   const worst = stats.days[stats.worstDay];
   const sel = stats.days[selected];
@@ -385,7 +388,7 @@ function StatsView({ data, stats }: { data: GetData; stats: NonNullable<GetData[
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="border-2 border-black bg-green-400 shadow-[4px_4px_0_black] p-3">
-          <p className="font-mono text-[10px] font-extrabold uppercase tracking-wide text-black mb-1">Best day</p>
+          <p className="font-mono text-[10px] font-extrabold uppercase tracking-wide text-black mb-1">Best {unit}</p>
           <p className="font-mono text-[14px] font-extrabold text-black">{dayLabel(best.dayIndex, cd, cl)}</p>
           <div className="flex items-center gap-2 mt-2">
             <PainFace value={clampScore(best.avg)} size="md" />
@@ -393,7 +396,7 @@ function StatsView({ data, stats }: { data: GetData; stats: NonNullable<GetData[
           </div>
         </div>
         <div className="border-2 border-black bg-red-300 shadow-[4px_4px_0_black] p-3">
-          <p className="font-mono text-[10px] font-extrabold uppercase tracking-wide text-black mb-1">Worst day</p>
+          <p className="font-mono text-[10px] font-extrabold uppercase tracking-wide text-black mb-1">Worst {unit}</p>
           <p className="font-mono text-[14px] font-extrabold text-black">{dayLabel(worst.dayIndex, cd, cl)}</p>
           <div className="flex items-center gap-2 mt-2">
             <PainFace value={clampScore(worst.avg)} size="md" />
