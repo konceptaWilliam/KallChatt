@@ -1083,7 +1083,7 @@ function ImageLightbox({
   );
 }
 
-// A single sent image rendered as the inline polaroid thumbnail. Tap → open the
+// A single sent image, rendered clean (no frame/caption). Tap → open the
 // zoomable lightbox; hold / right-click → open the actions menu.
 function ThreadImage({
   att,
@@ -1098,32 +1098,18 @@ function ThreadImage({
   return (
     <button
       {...press}
-      className="text-left transition-all duration-150 hover:scale-[1.03]"
-      style={{
-        background: "var(--background)",
-        padding: "8px 8px 28px 8px",
-        boxShadow:
-          "0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)",
-        rotate: "1deg",
-        width: "160px",
-        display: "block",
-      }}
+      className="block overflow-hidden border border-border bg-surface-2 transition-opacity duration-150 hover:opacity-90"
+      style={{ maxWidth: 272, lineHeight: 0 }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={att.url}
         alt={att.name}
         draggable={false}
-        className="w-full object-cover"
-        style={{ aspectRatio: "1/1", display: "block" }}
+        className="block h-auto w-full"
+        style={{ maxHeight: 360, objectFit: "cover" }}
         loading="lazy"
       />
-      <span
-        className="font-mono text-[10px] text-center truncate block mt-2"
-        style={{ color: "#888" }}
-      >
-        {att.name}
-      </span>
     </button>
   );
 }
