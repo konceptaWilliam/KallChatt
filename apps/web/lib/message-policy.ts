@@ -107,23 +107,6 @@ export function buildCatchUp(
   };
 }
 
-// Push debounce: once we've buzzed a user about a thread, hold off on further
-// pushes for that same thread within a short window — a burst of messages
-// becomes one buzz, not N. A mention or an URGENT thread always breaks through
-// (those are worth interrupting for). `lastPushedAtMs` is null when we've never
-// pushed this (user, thread) pair. Pure so it unit-tests without I/O.
-export function shouldSendPush(opts: {
-  lastPushedAtMs: number | null;
-  nowMs: number;
-  windowMs: number;
-  mentioned: boolean;
-  urgent: boolean;
-}): boolean {
-  if (opts.mentioned || opts.urgent) return true;
-  if (opts.lastPushedAtMs == null) return true;
-  return opts.nowMs - opts.lastPushedAtMs >= opts.windowMs;
-}
-
 // Core notification decision. Mentions bypass a thread mute; level NONE and a
 // global pause always win.
 export function shouldNotify(opts: {
