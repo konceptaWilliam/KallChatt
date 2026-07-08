@@ -3624,6 +3624,24 @@ export function ThreadDetail({
     e.preventDefault();
   }
 
+  // Ctrl/Cmd-V of a screenshot (or any image) stages it as an attachment.
+  // Only intercept when the clipboard actually carries files — a plain-text
+  // paste falls through to the textarea's default behaviour.
+  function handlePaste(e: React.ClipboardEvent) {
+    const pasted = Array.from(e.clipboardData.files);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    const errors: string[] = [];
+    const valid: File[] = [];
+    for (const file of pasted) {
+      const err = validateFile(file);
+      if (err) errors.push(`${err.file}: ${err.reason}`);
+      else valid.push(file);
+    }
+    if (errors.length > 0) showError(errors.join("\n"));
+    if (valid.length > 0) setPendingFiles((prev) => [...prev, ...valid]);
+  }
+
   const failedMessages = useMemo<Message[]>(
     () =>
       failedSends.map((entry) => ({
@@ -4957,6 +4975,7 @@ export function ThreadDetail({
               value={body}
               onChange={handleBodyChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="message"
               rows={1}
               className="flex-1 min-h-[44px] md:min-h-[40px] max-h-[72px] border-none bg-transparent px-2.5 py-[10px] font-sans text-base md:text-[13.5px] leading-[1.45] text-ink placeholder:text-muted resize-none outline-none overflow-y-auto"
