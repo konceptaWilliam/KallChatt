@@ -302,6 +302,41 @@ export const threadsRouter = router({
       return { success: true };
     }),
 
+  // Mark every thread in every group the caller belongs to as read. Upserts a
+  // thread_reads marker at `now` for all of them. Returns the affected thread
+  // ids so the client can also advance its local lastSeen baselines.
+  markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+    const { supabase, profile } = ctx;
+    const admin = createAdminClient();
+
+    const { data: memberships } = await supabase
+      .from("group_memberships")
+      .select("group_id")
+      .eq("user_id", profile.id);
+    const groupIds = (memberships ?? []).map((m) => m.group_id as string);
+    if (groupIds.length === 0) return { success: true, threadIds: [] as string[] };
+
+    const { data: threads } = await admin
+      .from("threads")
+      .select("id")
+      .in("group_id", groupIds);
+    const threadIds = (threads ?? []).map((t) => t.id as string);
+    if (threadIds.length === 0) return { success: true, threadIds: [] as string[] };
+
+    const now = new Date().toISOString();
+    const { error } = await admin.from("thread_reads").upsert(
+      threadIds.map((thread_id) => ({
+        thread_id,
+        user_id: profile.id,
+        last_read_at: now,
+      })),
+      { onConflict: "thread_id,user_id" }
+    );
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+
+    return { success: true, threadIds };
+  }),
+
   // Per-thread unread message counts for the thread-list badge. `since` is the
   // client's persisted lastSeen baseline ({ threadId: epochMs }); the server
   // counts messages newer than it, excluding the caller's own and deleted ones.

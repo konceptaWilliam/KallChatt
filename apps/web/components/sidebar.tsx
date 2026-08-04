@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SearchDialog } from "./search-dialog";
 import { useMobileSidebar } from "@/lib/mobile-sidebar-context";
+import { setLastSeen } from "@/lib/unread-context";
 import { trpc } from "@/lib/trpc/client";
 import { createClient, setRealtimeAuth } from "@/lib/supabase/client";
 
@@ -429,8 +430,19 @@ export function Sidebar({
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const utils = trpc.useUtils();
+
+  const markAllRead = trpc.threads.markAllRead.useMutation({
+    onSuccess: ({ threadIds }) => {
+      const now = Date.now();
+      for (const id of threadIds ?? []) setLastSeen(id, now);
+      utils.groups.unread.invalidate();
+      utils.threads.unreadCounts.invalidate();
+      setMenuOpen(false);
+    },
+  });
   const { data: unread = {} } = trpc.groups.unread.useQuery(undefined, {
     staleTime: 30_000,
   });
@@ -539,13 +551,49 @@ export function Sidebar({
           <span className="font-mono text-[10px] text-muted-2 uppercase tracking-[0.18em]">
             Groups
           </span>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="font-mono text-[14px] text-muted-2 hover:text-ink transition-colors leading-none"
-            title="New group"
-          >
-            +
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="font-mono text-[14px] text-muted-2 hover:text-ink transition-colors leading-none"
+              title="New group"
+            >
+              +
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className="font-mono text-[14px] text-muted-2 hover:text-ink transition-colors leading-none"
+                title="More"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                …
+              </button>
+              {menuOpen && (
+                <>
+                  {/* Click-away backdrop */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setMenuOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1 w-44 border border-border bg-surface shadow-lg"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => markAllRead.mutate()}
+                      disabled={markAllRead.isPending}
+                      className="block w-full px-3 py-2 text-left font-mono text-[11px] text-ink hover:bg-border/50 transition-colors disabled:opacity-50"
+                    >
+                      {markAllRead.isPending ? "Marking…" : "Mark all as read"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
         <GroupNav groups={groups} unread={unread} pathname={pathname} onNavigate={close} />
 
